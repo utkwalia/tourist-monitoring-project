@@ -1,0 +1,14 @@
+{
+  "name": "safepath-app",
+  "version": "1.0.0",
+  "private": true,
+  "description": "SafePath demo app with a static frontend and simple event API server.",
+  "main": "simple-server.js",
+  "scripts": {
+    "start": "node simple-server.js"
+  },
+  "dependencies": {
+    "cors": "^2.8.5",
+    "express": "^4.21.2"
+  }
+}

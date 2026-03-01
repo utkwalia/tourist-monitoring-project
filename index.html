@@ -1,0 +1,359 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>SafePath - Smart Tourist Safety</title>
+    <link rel="stylesheet" href="style.css">
+    <link
+        href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Lexend:wght@300;400;500;600;700&family=Roboto+Mono:wght@400;500&display=swap"
+        rel="stylesheet">
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.7.1/dist/leaflet.css" />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+</head>
+
+<body>
+    <!-- Login Screen -->
+    <div id="login-screen" class="screen active">
+        <div class="login-container">
+            <div class="login-card">
+                <div class="logo-container">
+                    <div class="logo">🛡️</div>
+                    <h1>SafePath</h1>
+                    <p class="tagline">Explore freely, return safely.</p>
+                    <span class="demo-badge">DEMO MODE</span>
+                </div>
+
+                <div class="form-container">
+                    <h2>Start Your Safe Journey</h2>
+                    <form id="login-form">
+                        <div class="input-group">
+                            <input type="email" id="email" placeholder="Email" value="demo@safepath.com" required>
+                            <i class="fas fa-envelope input-icon"></i>
+                        </div>
+                        <div class="input-group">
+                            <input type="password" id="password" placeholder="Password" value="demo123" required>
+                            <i class="fas fa-lock input-icon"></i>
+                        </div>
+                        <button type="submit" class="btn-primary">
+                            <span>Sign In / Sign Up</span>
+                            <i class="fas fa-arrow-right"></i>
+                        </button>
+                    </form>
+                    <p class="demo-note">
+                        <i class="fas fa-info-circle"></i>
+                        Demo Mode: Click Sign In to continue
+                    </p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Main Dashboard -->
+    <div id="dashboard-screen" class="screen">
+        <!-- Header -->
+        <header class="header">
+            <div class="header-content">
+                <div class="logo-small">
+                    <i class="fas fa-shield-alt"></i>
+                    <span>SafePath</span>
+                </div>
+                <div class="user-info">
+                    <button id="night-vision-btn" class="btn-text night-vision-header-btn">
+                        <i class="fas fa-moon"></i>
+                        <span>Night Vision OFF</span>
+                    </button>
+                    <span id="user-email" class="user-email"></span>
+                    <button id="logout-btn" class="btn-text">
+                        <i class="fas fa-sign-out-alt"></i>
+                        <span>Logout</span>
+                    </button>
+                </div>
+            </div>
+        </header>
+
+        <!-- Status Card -->
+        <div class="status-card" id="status-card">
+            <div class="status-indicator green"></div>
+            <div class="status-text">
+                <strong>All systems nominal</strong>
+                <span>Your safety circle is watching</span>
+            </div>
+        </div>
+
+        <!-- Main Content -->
+        <div class="main-content">
+            <!-- Map Container -->
+            <div id="map" class="map-container"></div>
+
+            <!-- Controls Panel -->
+            <div class="controls-panel">
+                <!-- Safety Readiness -->
+                <div class="panel-section">
+                    <h3><i class="fas fa-list-check"></i> Safety Readiness</h3>
+                    <div class="smart-row">
+                        <span class="smart-label">Overall</span>
+                        <span id="readiness-overall" class="smart-pill">--</span>
+                    </div>
+                    <div class="smart-list readiness-list">
+                        <div id="ready-battery" class="readiness-item">🔋 --</div>
+                        <div id="ready-gps" class="readiness-item">📍 --</div>
+                        <div id="ready-network" class="readiness-item">📡 --</div>
+                        <div id="ready-contacts" class="readiness-item">👥 --</div>
+                        <div id="ready-queue" class="readiness-item">☁️ --</div>
+                    </div>
+                    <button id="refresh-readiness-btn" class="btn-secondary">
+                        <i class="fas fa-rotate"></i>
+                        Refresh Checklist
+                    </button>
+                </div>
+
+                <!-- Onboarding Presets -->
+                <div class="panel-section">
+                    <h3><i class="fas fa-sliders"></i> Onboarding Presets</h3>
+                    <div class="preset-controls">
+                        <select id="onboarding-preset">
+                            <option value="">Select preset</option>
+                            <option value="city">City Tourist</option>
+                            <option value="solo">Solo Traveler</option>
+                            <option value="hike">Hike/Trek</option>
+                        </select>
+                        <button id="apply-preset-btn" class="btn-secondary">
+                            <i class="fas fa-check"></i>
+                            Apply Preset
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Trip Info -->
+                <div class="panel-section">
+                    <h3><i class="fas fa-suitcase"></i> Current Trip</h3>
+                    <div id="trip-status" class="trip-status">
+                        <p class="no-active">No active trip</p>
+                        <button id="start-trip-btn" class="btn-secondary">
+                            <i class="fas fa-plus"></i>
+                            Start New Trip
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Safety Circle -->
+                <div class="panel-section">
+                    <h3><i class="fas fa-users"></i> Safety Circle</h3>
+                    <div id="safety-circle-list" class="contact-list"></div>
+                    <button id="add-contact-btn" class="btn-secondary">
+                        <i class="fas fa-user-plus"></i>
+                        Add Contact
+                    </button>
+                </div>
+
+                <!-- Safe Zones -->
+                <div class="panel-section">
+                    <h3><i class="fas fa-draw-polygon"></i> Safe Zones</h3>
+                    <div id="geofences-list" class="geofence-list"></div>
+                    <button id="add-geofence-btn" class="btn-secondary">
+                        <i class="fas fa-plus-circle"></i>
+                        Draw Safe Zone
+                    </button>
+                </div>
+
+                <!-- Safety Intelligence -->
+                <div class="panel-section">
+                    <h3><i class="fas fa-shield-heart"></i> Safety Intelligence</h3>
+                    <div class="smart-row">
+                        <span class="smart-label">Safety Score</span>
+                        <span id="safety-score-pill" class="smart-pill">--</span>
+                    </div>
+                    <div class="smart-row">
+                        <span class="smart-label">Hotel Base</span>
+                        <span id="hotel-status" class="smart-subtle">Not configured</span>
+                    </div>
+                    <button id="set-hotel-btn" class="btn-secondary">
+                        <i class="fas fa-hotel"></i>
+                        Set Hotel At Current Location
+                    </button>
+                    <button id="report-hazard-btn" class="btn-secondary">
+                        <i class="fas fa-triangle-exclamation"></i>
+                        Report Nearby Hazard
+                    </button>
+                </div>
+
+                <!-- Safety Timer -->
+                <div class="panel-section">
+                    <h3><i class="fas fa-hourglass-half"></i> Safety Timer</h3>
+                    <div id="timer-section">
+                        <div class="timer-display" id="timer-display">--:--</div>
+                        <div class="timer-controls">
+                            <input type="number" id="timer-minutes" placeholder="Minutes" min="1" max="120" value="20">
+                            <button id="start-timer-btn" class="btn-secondary">
+                                <i class="fas fa-play"></i>
+                                Start
+                            </button>
+                        </div>
+                        <button id="check-in-btn" class="btn-primary check-in-btn" style="display: none;">
+                            <i class="fas fa-check"></i>
+                            I'm Safe
+                        </button>
+                        <p class="timer-note">
+                            <i class="fas fa-info-circle"></i>
+                            Set a timer for your journey
+                        </p>
+                        <button id="play-last-audio-btn" class="btn-secondary">
+                            <i class="fas fa-wave-square"></i>
+                            Play Last 30s Clip
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Local Emergency -->
+                <div class="panel-section">
+                    <h3><i class="fas fa-ambulance"></i> Local Emergency</h3>
+                    <div id="emergency-info" class="emergency-info"></div>
+                    <button id="local-emergency-call" class="btn-primary emergency-call">
+                        <i class="fas fa-phone-alt"></i>
+                        Call Local Emergency
+                    </button>
+                </div>
+
+                <!-- Shadow Track -->
+                <div class="panel-section">
+                    <h3><i class="fas fa-eye"></i> Shadow Track</h3>
+                    <div class="shadow-track-controls">
+                        <label class="switch">
+                            <input type="checkbox" id="shadow-track-toggle">
+                            <span class="slider"></span>
+                        </label>
+                        <span id="shadow-track-status" class="track-status">Disabled</span>
+                    </div>
+                    <p class="shadow-note">
+                        <i class="fas fa-info-circle"></i>
+                        High-risk mode: Increased tracking
+                    </p>
+                </div>
+
+                <!-- Silent SOS -->
+                <div class="panel-section">
+                    <h3><i class="fas fa-user-secret"></i> Silent SOS</h3>
+                    <div class="shadow-track-controls">
+                        <label class="switch">
+                            <input type="checkbox" id="silent-sos-toggle">
+                            <span class="slider"></span>
+                        </label>
+                        <span id="silent-sos-status" class="track-status">Stealth OFF</span>
+                    </div>
+                    <p class="shadow-note">
+                        <i class="fas fa-info-circle"></i>
+                        Sends SOS discreetly without alarm UI
+                    </p>
+                </div>
+
+                <!-- Language Bridge -->
+                <div class="panel-section">
+                    <h3><i class="fas fa-language"></i> Language Bridge</h3>
+                    <p id="help-phrase-text" class="smart-subtle">Help phrase loading...</p>
+                    <button id="play-help-phrase-btn" class="btn-secondary">
+                        <i class="fas fa-volume-high"></i>
+                        Play Local Help Phrase
+                    </button>
+                </div>
+
+                <!-- Trust & Compliance -->
+                <div class="panel-section">
+                    <h3><i class="fas fa-lock"></i> Secure Vault</h3>
+                    <div id="vault-docs-list" class="smart-list"></div>
+                    <button id="add-vault-doc-btn" class="btn-secondary">
+                        <i class="fas fa-file-shield"></i>
+                        Add Encrypted Document
+                    </button>
+
+                    <h3 style="margin-top: 1rem;"><i class="fas fa-qrcode"></i> Emergency Share</h3>
+                    <div id="share-links-list" class="smart-list"></div>
+                    <img id="share-qr-image" class="share-qr" alt="Emergency share QR" />
+                    <button id="create-share-link-btn" class="btn-secondary">
+                        <i class="fas fa-link"></i>
+                        Create Expiring Share Link
+                    </button>
+
+                    <h3 style="margin-top: 1rem;"><i class="fas fa-clipboard-list"></i> Audit Trail</h3>
+                    <div id="audit-trail-list" class="smart-list"></div>
+                </div>
+            </div>
+        </div>
+
+        <!-- SOS Slide Container -->
+        <div class="sos-slide-container">
+            <div class="sos-slide-track">
+                <div class="sos-slide-progress"></div>
+                <div class="sos-slide-thumb">
+                    <i class="fas fa-exclamation-triangle"></i>
+                </div>
+                <div class="sos-slide-label">SLIDE FOR SOS</div>
+            </div>
+        </div>
+
+        <!-- Coordinate Display -->
+        <div id="coordinate-display" class="coordinate-display">
+            <i class="fas fa-satellite"></i>
+            <span>Waiting for GPS...</span>
+        </div>
+    </div>
+
+    <!-- Add Contact Modal -->
+    <div id="contact-modal" class="modal">
+        <div class="modal-content">
+            <span class="close">&times;</span>
+            <h3><i class="fas fa-user-plus"></i> Add to Safety Circle</h3>
+            <div class="input-group">
+                <input type="text" id="contact-name" placeholder="Contact Name" value="John Doe">
+                <i class="fas fa-user input-icon"></i>
+            </div>
+            <div class="input-group">
+                <input type="email" id="contact-email" placeholder="Contact Email" value="john@example.com">
+                <i class="fas fa-envelope input-icon"></i>
+            </div>
+            <div class="input-group">
+                <input type="text" id="contact-phone" placeholder="Phone (optional)" value="+1 234 567 8900">
+                <i class="fas fa-phone input-icon"></i>
+            </div>
+            <button id="save-contact" class="btn-primary">
+                <i class="fas fa-check"></i>
+                Add Contact
+            </button>
+        </div>
+    </div>
+
+    <!-- Alert Modal -->
+    <div id="alert-modal" class="modal alert-modal">
+        <div class="modal-content alert-content">
+            <div class="alert-icon">⚠️</div>
+            <h3 id="alert-title">Safety Alert</h3>
+            <p id="alert-message"></p>
+            <button id="acknowledge-alert" class="btn-primary">
+                <i class="fas fa-check"></i>
+                Acknowledge
+            </button>
+        </div>
+    </div>
+
+    <!-- SOS Pre-Alert Modal -->
+    <div id="sos-prealert-modal" class="modal">
+        <div class="modal-content sos-prealert-content">
+            <h3><i class="fas fa-hourglass-start"></i> SOS in <span id="sos-countdown">10</span>s</h3>
+            <p>Cancel now if this was accidental.</p>
+            <div class="sos-prealert-actions">
+                <button id="cancel-sos-btn" class="btn-secondary">Cancel</button>
+                <button id="send-sos-now-btn" class="btn-primary">Send Now</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Haptic Feedback Element -->
+    <div class="haptic-feedback"></div>
+
+    <!-- Scripts -->
+    <script src="https://unpkg.com/leaflet@1.7.1/dist/leaflet.js"></script>
+    <script src="app.js"></script>
+</body>
+
+</html>

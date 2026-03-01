@@ -1,0 +1,50 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Test SafePath API</title>
+</head>
+<body>
+    <h1>SafePath API Tester</h1>
+    
+    <button onclick="testLogEvent()">Log Test Event</button>
+    <button onclick="testGetEvents()">Get Recent Events</button>
+    <button onclick="testExport()">Export to CSV</button>
+    
+    <pre id="result"></pre>
+
+    <script>
+        const API_URL = 'http://localhost:3000/api';
+        
+        async function testLogEvent() {
+            const event = {
+                trigger_type: 'SOS_MANUAL',
+                battery_level: 85,
+                latitude: 40.7128,
+                longitude: -74.0060,
+                additional_data: { test: true }
+            };
+            
+            const res = await fetch(`${API_URL}/events`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(event)
+            });
+            
+            const data = await res.json();
+            document.getElementById('result').textContent = 
+                JSON.stringify(data, null, 2);
+        }
+        
+        async function testGetEvents() {
+            const res = await fetch(`${API_URL}/events/recent?hours=24`);
+            const data = await res.json();
+            document.getElementById('result').textContent = 
+                JSON.stringify(data, null, 2);
+        }
+        
+        function testExport() {
+            window.open(`${API_URL}/events/export`, '_blank');
+        }
+    </script>
+</body>
+</html>
