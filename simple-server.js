@@ -4,9 +4,11 @@ const path = require('path');
 const cors = require('cors');
 const app = express();
 const PORT = process.env.PORT || 3000;
+const WEB_DIR = path.join(__dirname, 'public');
 
 app.use(cors());
 app.use(express.json());
+app.use(express.static(WEB_DIR));
 
 const DATA_FILE = path.join(__dirname, 'events.json');
 
@@ -58,6 +60,11 @@ app.get('/api/events/recent', (req, res) => {
     
     const recent = data.events.filter(e => new Date(e.timestamp) > cutoff);
     res.json(recent);
+});
+
+// Serve app shell
+app.get('/', (req, res) => {
+    res.sendFile(path.join(WEB_DIR, 'index.html'));
 });
 
 // Export to CSV
