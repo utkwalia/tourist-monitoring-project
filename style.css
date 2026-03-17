@@ -1467,22 +1467,65 @@ input:checked+.slider:before {
 }
 
 @media (max-width: 768px) {
+    body {
+        overflow-y: auto;
+        overflow-x: hidden;
+    }
+
+    .header {
+        padding-top: max(env(safe-area-inset-top), 20px);
+        padding-left: 12px;
+        padding-right: 12px;
+        padding-bottom: 8px;
+        height: auto;
+    }
+
+    .header-content {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+    }
+
+    .logo-small {
+        width: auto;
+        justify-content: flex-start;
+        font-size: 1.05rem;
+    }
+
+    .user-info {
+        width: auto;
+        justify-content: flex-end;
+        flex-wrap: nowrap;
+        gap: 10px;
+    }
+
     .main-content {
-        grid-template-columns: 1fr;
+        position: relative;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: auto;
+        margin-top: calc(max(env(safe-area-inset-top), 20px) + 56px);
+        display: block;
+        overflow: visible;
     }
 
     .controls-panel {
-        position: fixed;
-        bottom: 0;
-        left: 0;
-        right: 0;
-        height: 45vh;
+        position: relative;
+        height: auto;
+        width: 100%;
         border-left: none;
-        border-top: 1px solid var(--glass-border);
+        border-top: 1px solid var(--theme-card-border);
+        padding-bottom: calc(1.5rem + env(safe-area-inset-bottom));
     }
 
     .map-container {
-        height: 55vh;
+        height: 50vh;
+        min-height: 320px;
+    }
+
+    .leaflet-container {
+        height: 50vh !important;
     }
 
     .status-card {
@@ -1491,7 +1534,7 @@ input:checked+.slider:before {
         max-width: 92vw;
         padding: 0.55rem 0.85rem;
         font-size: 0.85rem;
-        top: 78px;
+        top: calc(max(env(safe-area-inset-top), 20px) + 56px);
         left: 50%;
         right: auto;
         transform: translateX(-50%);
@@ -1499,14 +1542,16 @@ input:checked+.slider:before {
 
     .sos-slide-container {
         width: min(320px, 92vw);
-        bottom: calc(45vh + 1rem);
+        bottom: calc(max(env(safe-area-inset-bottom), 20px) + 16px);
         left: 50%;
         right: auto;
         transform: translateX(-50%);
+        z-index: 1002;
     }
 
     .coordinate-display {
-        bottom: calc(45vh + 6rem);
+        top: auto;
+        bottom: calc(max(env(safe-area-inset-bottom), 20px) + 96px);
         left: 1rem;
         right: 1rem;
         transform: none;
@@ -1515,21 +1560,46 @@ input:checked+.slider:before {
         padding: 6px 12px;
     }
 
-    .header {
-        padding: 0 1rem;
+    .user-email {
+        display: none;
     }
 
-    .user-email {
+    .hide-on-mobile {
         display: none;
     }
 
     .night-vision-header-btn {
         min-width: 0;
-        padding: 0.5rem 0.8rem;
+        padding: 0.4rem 0.55rem;
     }
 
     .night-vision-header-btn span {
-        font-size: 0.8rem;
+        display: none;
+    }
+
+    .theme-toggle-btn {
+        width: 34px;
+        padding: 0.4rem;
+    }
+
+    #logout-btn span {
+        display: none;
+    }
+
+    #logout-btn,
+    .night-vision-header-btn,
+    .theme-toggle-btn {
+        border-radius: 999px;
+        height: 36px;
+        width: 36px;
+        padding: 0;
+        justify-content: center;
+    }
+
+    #logout-btn i,
+    .night-vision-header-btn i,
+    .theme-toggle-btn i {
+        font-size: 0.95rem;
     }
 
     .login-card {
