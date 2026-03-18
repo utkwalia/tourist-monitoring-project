@@ -453,6 +453,21 @@ h4,
     transition: all 0.3s ease;
 }
 
+.status-col {
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+}
+
+.status-col--secure,
+.status-col--user {
+    display: none;
+}
+
+.mobile-tools-header {
+    display: none;
+}
+
 .status-indicator {
     width: 10px;
     height: 10px;
@@ -1505,7 +1520,7 @@ input:checked+.slider:before {
         left: 0;
         right: 0;
         bottom: auto;
-        margin-top: calc(max(env(safe-area-inset-top), 20px) + 56px);
+        margin-top: calc(max(env(safe-area-inset-top), 20px) + 72px);
         display: block;
         overflow: visible;
     }
@@ -1516,48 +1531,53 @@ input:checked+.slider:before {
         width: 100%;
         border-left: none;
         border-top: 1px solid var(--theme-card-border);
-        padding-bottom: calc(1.5rem + env(safe-area-inset-bottom));
+        padding-bottom: max(env(safe-area-inset-bottom), 20px);
     }
 
     .map-container {
-        height: 50vh;
-        min-height: 320px;
+        height: 48vh;
+        min-height: 300px;
     }
 
     .leaflet-container {
-        height: 50vh !important;
+        height: 48vh !important;
     }
 
     .status-card {
-        min-width: 0;
-        width: 90%;
-        max-width: 92vw;
-        padding: 0.55rem 0.85rem;
-        font-size: 0.85rem;
-        top: calc(max(env(safe-area-inset-top), 20px) + 56px);
-        left: 50%;
-        right: auto;
-        transform: translateX(-50%);
+        position: fixed;
+        top: calc(max(env(safe-area-inset-top), 20px) + 52px);
+        left: 12px;
+        right: 12px;
+        width: auto;
+        padding: 0.5rem 0.75rem;
+        font-size: 0.78rem;
+        background: #ffffff;
+        color: #1f2a36;
+        border-radius: 16px;
+        gap: 0.5rem;
+        justify-content: space-between;
+        z-index: 1001;
     }
 
     .sos-slide-container {
-        width: min(320px, 92vw);
-        bottom: calc(max(env(safe-area-inset-bottom), 20px) + 16px);
-        left: 50%;
-        right: auto;
-        transform: translateX(-50%);
+        width: calc(100% - 24px);
+        bottom: calc(max(env(safe-area-inset-bottom), 20px) + 12px);
+        left: 12px;
+        right: 12px;
+        transform: none;
         z-index: 1002;
     }
 
     .coordinate-display {
         top: auto;
-        bottom: calc(max(env(safe-area-inset-bottom), 20px) + 96px);
-        left: 1rem;
-        right: 1rem;
-        transform: none;
-        max-width: calc(100vw - 2rem);
+        bottom: calc(max(env(safe-area-inset-bottom), 20px) + 86px);
+        left: 50%;
+        right: auto;
+        transform: translateX(-50%);
+        max-width: calc(100vw - 24px);
         font-size: 0.7rem;
-        padding: 6px 12px;
+        padding: 6px 14px;
+        text-align: center;
     }
 
     .user-email {
@@ -1600,6 +1620,85 @@ input:checked+.slider:before {
     .night-vision-header-btn i,
     .theme-toggle-btn i {
         font-size: 0.95rem;
+    }
+
+    .status-col {
+        flex: 1 1 0;
+        justify-content: center;
+    }
+
+    .status-col--gps {
+        justify-content: flex-start;
+    }
+
+    .status-col--secure,
+    .status-col--user {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 2px;
+    }
+
+    .status-col .status-text strong {
+        font-size: 0.72rem;
+        font-weight: var(--weight-semibold);
+    }
+
+    .status-col .status-text span {
+        font-size: 0.65rem;
+        opacity: 0.7;
+    }
+
+    .coordinate-display.gps-error {
+        top: calc(max(env(safe-area-inset-top), 20px) + 112px);
+        bottom: auto;
+        left: 12px;
+        right: 12px;
+        transform: none;
+        width: auto;
+        text-align: center;
+    }
+
+    .coordinate-display.gps-ok {
+        width: auto;
+        min-width: 120px;
+    }
+
+    .mobile-tools-header {
+        display: block;
+        margin-bottom: 0.75rem;
+    }
+
+    .mobile-tools-header h3 {
+        font-size: 0.8rem;
+        text-transform: uppercase;
+        letter-spacing: 1px;
+        color: var(--theme-item-muted);
+        margin-bottom: 0.5rem;
+    }
+
+    .mobile-tabs {
+        display: flex;
+        gap: 8px;
+        background: var(--theme-item-bg);
+        padding: 4px;
+        border-radius: 12px;
+    }
+
+    .mobile-tab {
+        flex: 1 1 0;
+        border: none;
+        background: transparent;
+        padding: 6px 8px;
+        border-radius: 10px;
+        font-size: 0.75rem;
+        font-weight: var(--weight-semibold);
+        color: var(--theme-item-muted);
+    }
+
+    .mobile-tab.active {
+        background: #dff6e8;
+        color: #1f5e3a;
     }
 
     .login-card {
