@@ -640,6 +640,29 @@ body.panel-collapsed .sos-slide-container {
     background: linear-gradient(180deg, rgba(213, 220, 232, 0.55), rgba(213, 220, 232, 0));
 }
 
+.main-content.panel-collapsed .panel-toggle-btn {
+    transform: translate(-15%, -50%);
+    background: linear-gradient(180deg, rgba(255, 255, 255, 1), rgba(236, 242, 250, 1));
+}
+
+body.dark-theme .panel-toggle-btn {
+    border-color: rgba(255, 255, 255, 0.08);
+    background: linear-gradient(180deg, rgba(18, 26, 40, 0.96), rgba(12, 20, 32, 0.96));
+    color: rgba(255, 255, 255, 0.9);
+}
+
+body.dark-theme .panel-toggle-btn:hover {
+    background: linear-gradient(180deg, rgba(24, 34, 52, 0.98), rgba(16, 26, 40, 0.98));
+}
+
+body.dark-theme .panel-toggle-btn::before {
+    background: linear-gradient(180deg, rgba(64, 78, 98, 0.6), rgba(64, 78, 98, 0));
+}
+
+body.dark-theme .main-content.panel-collapsed .panel-toggle-btn {
+    background: linear-gradient(180deg, rgba(20, 30, 48, 0.98), rgba(14, 24, 38, 0.98));
+}
+
 body:not(.dark-theme) .panel-toggle-btn {
     border-color: rgba(0, 0, 0, 0.08);
     background: linear-gradient(180deg, rgba(255, 255, 255, 0.98), rgba(242, 246, 252, 0.98));
