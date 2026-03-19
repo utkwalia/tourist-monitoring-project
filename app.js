@@ -1716,6 +1716,34 @@ function setupThemeToggle() {
     });
 }
 
+// ===== INFO PANEL TOGGLE =====
+function setupInfoPanelToggle() {
+    const toggleBtn = document.getElementById('panel-toggle-btn');
+    const mainContent = document.querySelector('.main-content');
+    const controlsPanel = document.querySelector('.controls-panel');
+    if (!toggleBtn || !mainContent) return;
+
+    const updateToggleState = (collapsed) => {
+        if (collapsed) {
+            toggleBtn.innerHTML = '<i class="fas fa-chevron-left"></i>';
+            toggleBtn.setAttribute('aria-label', 'Show Info Panel');
+            toggleBtn.setAttribute('title', 'Show Info Panel');
+        } else {
+            toggleBtn.innerHTML = '<i class="fas fa-chevron-right"></i>';
+            toggleBtn.setAttribute('aria-label', 'Hide Info Panel');
+            toggleBtn.setAttribute('title', 'Hide Info Panel');
+        }
+    };
+
+    updateToggleState(false);
+
+    toggleBtn.addEventListener('click', () => {
+        const collapsed = mainContent.classList.toggle('panel-collapsed');
+        document.body.classList.toggle('panel-collapsed', collapsed);
+        updateToggleState(collapsed);
+    });
+}
+
 function highlightWellLitPaths() {
     if (!map || !userMarker) return;
     
@@ -2376,6 +2404,7 @@ document.addEventListener('DOMContentLoaded', () => {
     // Setup UI elements
     setupNightVisionToggle();
     setupThemeToggle();
+    setupInfoPanelToggle();
     setupSlideToSOS();
     setupHapticFeedback();
     setupBatteryMonitoring();

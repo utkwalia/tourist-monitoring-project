@@ -63,6 +63,17 @@ const HELLO_PHRASES = {
     default: { lang: 'en-US', text: 'Help me. I am in danger. Please call emergency services.' }
 };
 
+function getCapacitorGeolocation() {
+    if (window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.Geolocation) {
+        return window.Capacitor.Plugins.Geolocation;
+    }
+    return null;
+}
+
+function isNativeCapacitor() {
+    return !!(window.Capacitor && typeof window.Capacitor.isNativePlatform === 'function' && window.Capacitor.isNativePlatform());
+}
+
 // Demo user
 const DEMO_USER = {
     email: 'demo@safepath.com',
@@ -194,8 +205,37 @@ function startLocationTracking() {
     
     console.log('Starting location tracking...');
     
+    const capacitorGeo = getCapacitorGeolocation();
+
+    if (isNativeCapacitor() && capacitorGeo) {
+        (async () => {
+            try {
+                if (typeof capacitorGeo.requestPermissions === 'function') {
+                    await capacitorGeo.requestPermissions();
+                }
+                const position = await capacitorGeo.getCurrentPosition({
+                    enableHighAccuracy: true,
+                    timeout: 10000
+                });
+                handlePositionUpdate(position);
+                setGpsStatus('active');
+                detectCountryFromLocation(position.coords.latitude, position.coords.longitude);
+            } catch (error) {
+                console.error('Capacitor geolocation error:', error);
+                setGpsStatus('error');
+                signalStrength = false;
+                updateSignalIndicator();
+                updateUserLocation(40.7128, -74.0060);
+                detectCountryFromLocation(40.7128, -74.0060);
+            }
+
+            restartAdaptiveLocationWatch();
+            setupSignalMonitoring();
+        })();
+        return;
+    }
+
     if ("geolocation" in navigator) {
-        // Get initial position
         navigator.geolocation.getCurrentPosition(
             position => {
                 const { latitude, longitude } = position.coords;
@@ -209,7 +249,6 @@ function startLocationTracking() {
                 setGpsStatus('error');
                 signalStrength = false;
                 updateSignalIndicator();
-                // Use default location
                 updateUserLocation(40.7128, -74.0060);
                 detectCountryFromLocation(40.7128, -74.0060);
             },
@@ -219,17 +258,15 @@ function startLocationTracking() {
                 maximumAge: 0
             }
         );
-        
+
         restartAdaptiveLocationWatch();
-        
-        // Start signal monitoring
         setupSignalMonitoring();
-        
-    } else {
-        console.log("Geolocation not supported");
-        setGpsStatus('error');
-        updateUserLocation(40.7128, -74.0060);
+        return;
     }
+
+    console.log("Geolocation not supported");
+    setGpsStatus('error');
+    updateUserLocation(40.7128, -74.0060);
 }
 
 function updateUserLocation(lat, lng) {
@@ -932,7 +969,7 @@ function handlePositionUpdate(position) {
 }
 
 function restartAdaptiveLocationWatch() {
-    if (!('geolocation' in navigator)) return;
+    const capacitorGeo = getCapacitorGeolocation();
 
     const simulatedPosition = {
         coords: userMarker ? {
@@ -941,6 +978,38 @@ function restartAdaptiveLocationWatch() {
         } : { latitude: 40.7128, longitude: -74.0060 }
     };
     const profile = getTrackingProfile(simulatedPosition);
+
+    if (isNativeCapacitor() && capacitorGeo) {
+        if (watchId && typeof capacitorGeo.clearWatch === 'function') {
+            capacitorGeo.clearWatch({ id: watchId });
+        }
+
+        capacitorGeo.watchPosition(
+            {
+                enableHighAccuracy: profile.enableHighAccuracy,
+                timeout: profile.timeout,
+                maximumAge: profile.maximumAge
+            },
+            (position, error) => {
+                if (error) {
+                    console.error('Capacitor watchPosition error:', error);
+                    signalStrength = false;
+                    updateSignalIndicator();
+                    setGpsStatus('error');
+                    return;
+                }
+                if (position) {
+                    handlePositionUpdate(position);
+                }
+            }
+        ).then(id => {
+            watchId = id;
+        });
+
+        return;
+    }
+
+    if (!('geolocation' in navigator)) return;
 
     if (watchId) {
         navigator.geolocation.clearWatch(watchId);
@@ -1647,6 +1716,56 @@ function setupThemeToggle() {
     });
 }
 
+// ===== INFO PANEL TOGGLE =====
+function setupInfoPanelToggle() {
+    const toggleBtn = document.getElementById('panel-toggle-btn');
+    const mainContent = document.querySelector('.main-content');
+    const mapContainer = document.getElementById('map');
+    if (!toggleBtn || !mainContent) return;
+
+    const updateToggleState = (collapsed) => {
+        if (collapsed) {
+            toggleBtn.innerHTML = '<i class="fas fa-chevron-left"></i>';
+            toggleBtn.setAttribute('aria-label', 'Show Info Panel');
+            toggleBtn.setAttribute('title', 'Show Info Panel');
+        } else {
+            toggleBtn.innerHTML = '<i class="fas fa-chevron-right"></i>';
+            toggleBtn.setAttribute('aria-label', 'Hide Info Panel');
+            toggleBtn.setAttribute('title', 'Hide Info Panel');
+        }
+    };
+
+    updateToggleState(false);
+
+    let resizeObserver = null;
+    if (mapContainer && 'ResizeObserver' in window) {
+        resizeObserver = new ResizeObserver(() => {
+            if (!map) return;
+            map.invalidateSize();
+            if (userMarker) {
+                const { lat, lng } = userMarker.getLatLng();
+                map.setView([lat, lng], map.getZoom(), { animate: false });
+            }
+        });
+        resizeObserver.observe(mapContainer);
+    }
+
+    toggleBtn.addEventListener('click', () => {
+        const collapsed = mainContent.classList.toggle('panel-collapsed');
+        document.body.classList.toggle('panel-collapsed', collapsed);
+        updateToggleState(collapsed);
+        setTimeout(() => {
+            if (map) {
+                map.invalidateSize();
+                if (userMarker) {
+                    const { lat, lng } = userMarker.getLatLng();
+                    map.setView([lat, lng], map.getZoom(), { animate: false });
+                }
+            }
+        }, 350);
+    });
+}
+
 function highlightWellLitPaths() {
     if (!map || !userMarker) return;
     
@@ -2307,6 +2426,7 @@ document.addEventListener('DOMContentLoaded', () => {
     // Setup UI elements
     setupNightVisionToggle();
     setupThemeToggle();
+    setupInfoPanelToggle();
     setupSlideToSOS();
     setupHapticFeedback();
     setupBatteryMonitoring();

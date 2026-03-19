@@ -3,7 +3,7 @@
 
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
     <title>SafePath - Smart Tourist Safety</title>
     <link rel="stylesheet" href="style.css">
     <link
@@ -59,10 +59,10 @@
                     <i class="fas fa-shield-alt"></i>
                     <span>SafePath</span>
                 </div>
-                <div class="user-info">
+                <div class="user-info header-actions">
                     <button id="night-vision-btn" class="btn-text night-vision-header-btn">
                         <i class="fas fa-moon"></i>
-                        <span>Night Vision OFF</span>
+                        <span class="hide-on-mobile">Night Vision OFF</span>
                     </button>
                     <span id="user-email" class="user-email"></span>
                     <button id="theme-toggle-btn" class="btn-text theme-toggle-btn" aria-pressed="false" aria-label="Switch to dark theme">
@@ -70,7 +70,7 @@
                     </button>
                     <button id="logout-btn" class="btn-text">
                         <i class="fas fa-sign-out-alt"></i>
-                        <span>Logout</span>
+                        <span class="hide-on-mobile">Logout</span>
                     </button>
                 </div>
             </div>
@@ -92,6 +92,9 @@
 
             <!-- Controls Panel -->
             <div class="controls-panel">
+                <button id="panel-toggle-btn" class="panel-toggle-btn" aria-label="Hide Info Panel" title="Hide Info Panel">
+                    <i class="fas fa-chevron-right"></i>
+                </button>
                 <!-- Safety Readiness -->
                 <div class="panel-section">
                     <h3><i class="fas fa-list-check"></i> Safety Readiness</h3>
