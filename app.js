@@ -1744,6 +1744,105 @@ function setupInfoPanelToggle() {
     });
 }
 
+// ===== MOBILE UI =====
+function setupMobileUI() {
+    const mobileSheet = document.getElementById('mobile-sheet');
+    const mobileSheetContent = document.getElementById('mobile-sheet-content');
+    const navMap = document.getElementById('mobile-nav-map');
+    const navSafety = document.getElementById('mobile-nav-safety');
+    const navTrip = document.getElementById('mobile-nav-trip');
+    const navSettings = document.getElementById('mobile-nav-settings');
+    const sosBtn = document.getElementById('mobile-sos-btn');
+    const sosOverlay = document.getElementById('mobile-sos-overlay');
+    const sosCancel = document.getElementById('mobile-sos-cancel');
+    const controlsPanel = document.querySelector('.controls-panel');
+    const mobileTabs = Array.from(document.querySelectorAll('.mobile-sheet-tab'));
+
+    if (!mobileSheet || !navMap || !navSafety || !controlsPanel || !mobileSheetContent) return;
+
+    const setActiveNav = (activeBtn) => {
+        [navMap, navSafety, navTrip, navSettings].forEach(btn => {
+            if (btn) btn.classList.toggle('active', btn === activeBtn);
+        });
+    };
+
+    navSafety.addEventListener('click', () => {
+        mobileSheet.classList.toggle('open');
+        setActiveNav(navSafety);
+    });
+
+    navMap.addEventListener('click', () => {
+        mobileSheet.classList.remove('open');
+        setActiveNav(navMap);
+    });
+
+    if (sosBtn && sosOverlay && sosCancel) {
+        sosBtn.addEventListener('click', () => {
+            sosOverlay.classList.add('active');
+        });
+        sosCancel.addEventListener('click', () => {
+            sosOverlay.classList.remove('active');
+        });
+    }
+
+    const syncMobileSheetContent = () => {
+        const isMobile = window.matchMedia('(max-width: 768px)').matches;
+        const moved = controlsPanel.dataset.mobileMoved === 'true';
+        if (isMobile && !moved) {
+            const nodesToMove = Array.from(controlsPanel.children).filter(
+                (node) => node.id !== 'panel-toggle-btn'
+            );
+            nodesToMove.forEach((node) => {
+                mobileSheetContent.appendChild(node);
+            });
+            controlsPanel.dataset.mobileMoved = 'true';
+            assignMobileTabs();
+            applyMobileTab('safety');
+        }
+
+        if (!isMobile && moved) {
+            const nodesToRestore = Array.from(mobileSheetContent.children);
+            nodesToRestore.forEach((node) => {
+                controlsPanel.appendChild(node);
+            });
+            delete controlsPanel.dataset.mobileMoved;
+        }
+    };
+
+    const assignMobileTabs = () => {
+        const sections = Array.from(mobileSheetContent.querySelectorAll('.panel-section'));
+        sections.forEach((section) => {
+            const title = section.querySelector('h3')?.textContent?.toLowerCase() || '';
+            let tab = 'safety';
+            if (title.includes('preset')) tab = 'presets';
+            if (title.includes('trip')) tab = 'trip';
+            section.dataset.mobileTab = tab;
+        });
+    };
+
+    const applyMobileTab = (tabName) => {
+        const sections = Array.from(mobileSheetContent.querySelectorAll('.panel-section'));
+        sections.forEach((section) => {
+            section.style.display = section.dataset.mobileTab === tabName ? '' : 'none';
+        });
+        mobileTabs.forEach((tab) => {
+            tab.classList.toggle('active', tab.dataset.tab === tabName);
+        });
+    };
+
+    mobileTabs.forEach((tab) => {
+        tab.addEventListener('click', () => {
+            applyMobileTab(tab.dataset.tab);
+        });
+    });
+
+    syncMobileSheetContent();
+    window.addEventListener('resize', () => {
+        clearTimeout(window.__mobileSheetResize);
+        window.__mobileSheetResize = setTimeout(syncMobileSheetContent, 150);
+    });
+}
+
 function highlightWellLitPaths() {
     if (!map || !userMarker) return;
     
@@ -2405,6 +2504,7 @@ document.addEventListener('DOMContentLoaded', () => {
     setupNightVisionToggle();
     setupThemeToggle();
     setupInfoPanelToggle();
+    setupMobileUI();
     setupSlideToSOS();
     setupHapticFeedback();
     setupBatteryMonitoring();
