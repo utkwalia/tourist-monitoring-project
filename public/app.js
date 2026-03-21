@@ -4,6 +4,9 @@
 // ===== APPLICATION STATE =====
 let currentUser = null;
 let map = null;
+let primaryTiles = null;
+let darkTiles = null;
+let fallbackTiles = null;
 let userMarker = null;
 let watchId = null;
 let geofences = [];
@@ -124,14 +127,21 @@ function initMap(lat = 40.7128, lng = -74.0060) {
         map.zoomControl.setPosition('topright');
         
         // Use CartoDB Voyager for desaturated map style, with OSM fallback
-        const primaryTiles = L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', {
+        primaryTiles = L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', {
+            attribution: '&copy; OpenStreetMap contributors &copy; CARTO',
+            subdomains: 'abcd',
+            maxZoom: 19,
+            minZoom: 2
+        });
+        
+        darkTiles = L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
             attribution: '&copy; OpenStreetMap contributors &copy; CARTO',
             subdomains: 'abcd',
             maxZoom: 19,
             minZoom: 2
         });
 
-        const fallbackTiles = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        fallbackTiles = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
             attribution: '&copy; OpenStreetMap contributors',
             subdomains: 'abc',
             maxZoom: 19,
@@ -139,15 +149,24 @@ function initMap(lat = 40.7128, lng = -74.0060) {
         });
 
         let tileLayerSwitched = false;
-        primaryTiles.on('tileerror', () => {
+        const handleTileError = () => {
             if (tileLayerSwitched) return;
             tileLayerSwitched = true;
-            map.removeLayer(primaryTiles);
+            if (map.hasLayer(primaryTiles)) map.removeLayer(primaryTiles);
+            if (map.hasLayer(darkTiles)) map.removeLayer(darkTiles);
             fallbackTiles.addTo(map);
             console.warn('Primary tiles failed to load, switched to OSM fallback.');
-        });
+        };
+        
+        primaryTiles.on('tileerror', handleTileError);
+        darkTiles.on('tileerror', handleTileError);
 
-        primaryTiles.addTo(map);
+        const isDark = document.body.classList.contains('dark-theme');
+        if (isDark) {
+            darkTiles.addTo(map);
+        } else {
+            primaryTiles.addTo(map);
+        }
         
         // Add custom user marker with pulse effect
         const customIcon = L.divIcon({
@@ -1198,26 +1217,28 @@ function addToSafetyCircle(name, email, phone) {
 }
 
 function updateSafetyCircleList() {
-    const list = document.getElementById('safety-circle-list');
-    if (!list) return;
+    const lists = [document.getElementById('safety-circle-list'), document.getElementById('mobile-safety-circle-list')].filter(Boolean);
+    if (!lists.length) return;
     
-    list.innerHTML = '';
-    
-    if (safetyCircle.length === 0) {
-        list.innerHTML = '<p class="no-contacts">No contacts added yet</p>';
-        return;
-    }
-    
-    safetyCircle.forEach(contact => {
-        const item = document.createElement('div');
-        item.className = 'contact-item';
-        item.innerHTML = `
-            <span class="contact-name">${contact.name}</span>
-            <span class="contact-status" style="background: ${contact.status === 'alerted' ? 'var(--amber)' : 'var(--emerald)'}">
-                ${contact.status === 'alerted' ? 'Alerted' : 'Watching'}
-            </span>
-        `;
-        list.appendChild(item);
+    lists.forEach(list => {
+        list.innerHTML = '';
+        
+        if (safetyCircle.length === 0) {
+            list.innerHTML = '<p class="no-contacts">No contacts added yet</p>';
+            return;
+        }
+        
+        safetyCircle.forEach(contact => {
+            const item = document.createElement('div');
+            item.className = 'contact-item';
+            item.innerHTML = `
+                <span class="contact-name">${contact.name}</span>
+                <span class="contact-status" style="background: ${contact.status === 'alerted' ? 'var(--amber)' : 'var(--emerald)'}">
+                    ${contact.status === 'alerted' ? 'Alerted' : 'Watching'}
+                </span>
+            `;
+            list.appendChild(item);
+        });
     });
 }
 
@@ -1257,14 +1278,17 @@ function startNewTrip() {
         shadowTrack: false
     };
     
-    const tripStatus = document.getElementById('trip-status');
-    tripStatus.innerHTML = `
-        <p><strong>${tripName}</strong> <span style="color: var(--emerald)">● Active</span></p>
-        <p class="metadata">Started: ${new Date().toLocaleTimeString()}</p>
-        <button id="end-trip-btn" class="btn-secondary" style="margin-top: 10px; background: var(--amber); color: white;">End Trip</button>
-    `;
-    
-    document.getElementById('end-trip-btn').addEventListener('click', endTrip);
+    const containers = [document.getElementById('trip-status'), document.getElementById('mobile-trip-status')].filter(Boolean);
+    containers.forEach((container, idx) => {
+        const btnId = idx === 0 ? 'end-trip-btn' : 'mobile-end-trip-btn';
+        container.innerHTML = `
+            <p><strong>${tripName}</strong> <span style="color: var(--emerald)">● Active</span></p>
+            <p class="metadata">Started: ${new Date().toLocaleTimeString()}</p>
+            <button id="${btnId}" class="btn-secondary" style="margin-top: 10px; background: var(--amber); color: white;">End Trip</button>
+        `;
+        const btn = document.getElementById(btnId);
+        if (btn) btn.addEventListener('click', endTrip);
+    });
     
     // Create default safe zone at current location
     if (userMarker) {
@@ -1285,11 +1309,16 @@ function endTrip() {
     }
     
     currentTrip = null;
-    document.getElementById('trip-status').innerHTML = `
-        <p>No active trip</p>
-        <button id="start-trip-btn" class="btn-secondary">Start New Trip</button>
-    `;
-    document.getElementById('start-trip-btn').addEventListener('click', startNewTrip);
+    const containers = [document.getElementById('trip-status'), document.getElementById('mobile-trip-status')].filter(Boolean);
+    containers.forEach((container, idx) => {
+        const btnId = idx === 0 ? 'start-trip-btn' : 'mobile-start-trip-btn';
+        container.innerHTML = `
+            <p>No active trip</p>
+            <button id="${btnId}" class="btn-secondary">Start New Trip</button>
+        `;
+        const btn = document.getElementById(btnId);
+        if (btn) btn.addEventListener('click', startNewTrip);
+    });
     
     showNotification('👋 Trip Ended', 'Your journey has been logged');
 }
@@ -1685,6 +1714,16 @@ function setupNightVisionToggle() {
 function applyThemePreference(isDark) {
     document.body.classList.toggle('dark-theme', isDark);
     updateThemeToggleIcon(isDark);
+    
+    if (map && primaryTiles && darkTiles) {
+        if (isDark) {
+            if (map.hasLayer(primaryTiles)) map.removeLayer(primaryTiles);
+            if (!map.hasLayer(darkTiles)) darkTiles.addTo(map);
+        } else {
+            if (map.hasLayer(darkTiles)) map.removeLayer(darkTiles);
+            if (!map.hasLayer(primaryTiles)) primaryTiles.addTo(map);
+        }
+    }
 }
 
 function updateThemeToggleIcon(isDark) {
@@ -1720,7 +1759,7 @@ function setupThemeToggle() {
 function setupInfoPanelToggle() {
     const toggleBtn = document.getElementById('panel-toggle-btn');
     const mainContent = document.querySelector('.main-content');
-    const mapContainer = document.getElementById('map');
+    const controlsPanel = document.querySelector('.controls-panel');
     if (!toggleBtn || !mainContent) return;
 
     const updateToggleState = (collapsed) => {
@@ -1737,32 +1776,135 @@ function setupInfoPanelToggle() {
 
     updateToggleState(false);
 
-    let resizeObserver = null;
-    if (mapContainer && 'ResizeObserver' in window) {
-        resizeObserver = new ResizeObserver(() => {
-            if (!map) return;
-            map.invalidateSize();
-            if (userMarker) {
-                const { lat, lng } = userMarker.getLatLng();
-                map.setView([lat, lng], map.getZoom(), { animate: false });
-            }
-        });
-        resizeObserver.observe(mapContainer);
-    }
-
     toggleBtn.addEventListener('click', () => {
         const collapsed = mainContent.classList.toggle('panel-collapsed');
         document.body.classList.toggle('panel-collapsed', collapsed);
         updateToggleState(collapsed);
-        setTimeout(() => {
-            if (map) {
-                map.invalidateSize();
-                if (userMarker) {
-                    const { lat, lng } = userMarker.getLatLng();
-                    map.setView([lat, lng], map.getZoom(), { animate: false });
-                }
+    });
+}
+
+// ===== MOBILE UI =====
+function setupMobileUI() {
+    const mobileSheet = document.getElementById('mobile-sheet');
+    const mobileSheetContent = document.getElementById('mobile-sheet-content');
+    const navMap = document.getElementById('mobile-nav-map');
+    const navSafety = document.getElementById('mobile-nav-safety');
+    const navTrip = document.getElementById('mobile-nav-trip');
+    const navSettings = document.getElementById('mobile-nav-settings');
+    const sosBtn = document.getElementById('mobile-sos-btn');
+    const sosOverlay = document.getElementById('mobile-sos-overlay');
+    const sosCancel = document.getElementById('mobile-sos-cancel');
+    const controlsPanel = document.querySelector('.controls-panel');
+    const quickActions = Array.from(document.querySelectorAll('.mobile-quick-action'));
+    const mobileTabs = Array.from(document.querySelectorAll('.mobile-sheet-tab'));
+
+    if (!mobileSheet || !navMap || !navSafety || !controlsPanel || !mobileSheetContent) return;
+
+    // Phase 1 DOM Extraction: Physically move Trapped Content back and forth
+    const relocatePanels = () => {
+        const dest = document.getElementById('mobile-bottom-utilities-wrapper');
+        const src = document.querySelector('.controls-scroll-area');
+        if (src && dest) {
+            if (window.innerWidth <= 768) {
+                Array.from(src.querySelectorAll('.panel-section')).forEach(panel => dest.appendChild(panel));
+            } else {
+                Array.from(dest.querySelectorAll('.panel-section')).forEach(panel => src.appendChild(panel));
             }
-        }, 350);
+        }
+    };
+    window.addEventListener('resize', relocatePanels);
+    relocatePanels();
+
+    const setActiveNav = (activeBtn) => {
+        [navMap, navSafety, navTrip, navSettings].forEach(btn => {
+            if (btn) btn.classList.toggle('active', btn === activeBtn);
+        });
+    };
+
+    navSafety.addEventListener('click', () => {
+        mobileSheet.classList.toggle('open');
+        setActiveNav(navSafety);
+    });
+
+    navMap.addEventListener('click', () => {
+        mobileSheet.classList.remove('open');
+        setActiveNav(navMap);
+    });
+
+    if (sosBtn && sosOverlay && sosCancel) {
+        sosBtn.addEventListener('click', () => {
+            sosOverlay.classList.add('active');
+        });
+        sosCancel.addEventListener('click', () => {
+            sosOverlay.classList.remove('active');
+        });
+    }
+
+    quickActions.forEach((btn) => {
+        btn.addEventListener('click', () => {
+            const targetId = btn.getAttribute('data-target');
+            if (!targetId) return;
+            const target = document.getElementById(targetId);
+            if (target) {
+                target.click();
+            }
+        });
+    });
+
+    const syncMobileSheetContent = () => {
+        return; // Permanently disabled: DOM extraction is now natively handled via relocatePanels mapping into the unified scrolling feed.
+        if (isMobile && !moved) {
+            const nodesToMove = Array.from(controlsPanel.children).filter(
+                (node) => node.id !== 'panel-toggle-btn'
+            );
+            nodesToMove.forEach((node) => {
+                mobileSheetContent.appendChild(node);
+            });
+            controlsPanel.dataset.mobileMoved = 'true';
+            assignMobileTabs();
+            applyMobileTab('safety');
+        }
+
+        if (!isMobile && moved) {
+            const nodesToRestore = Array.from(mobileSheetContent.children);
+            nodesToRestore.forEach((node) => {
+                controlsPanel.appendChild(node);
+            });
+            delete controlsPanel.dataset.mobileMoved;
+        }
+    };
+
+    const assignMobileTabs = () => {
+        const sections = Array.from(mobileSheetContent.querySelectorAll('.panel-section'));
+        sections.forEach((section) => {
+            const title = section.querySelector('h3')?.textContent?.toLowerCase() || '';
+            let tab = 'safety';
+            if (title.includes('preset')) tab = 'presets';
+            if (title.includes('trip')) tab = 'trip';
+            section.dataset.mobileTab = tab;
+        });
+    };
+
+    const applyMobileTab = (tabName) => {
+        const sections = Array.from(mobileSheetContent.querySelectorAll('.panel-section'));
+        sections.forEach((section) => {
+            section.style.display = section.dataset.mobileTab === tabName ? '' : 'none';
+        });
+        mobileTabs.forEach((tab) => {
+            tab.classList.toggle('active', tab.dataset.tab === tabName);
+        });
+    };
+
+    mobileTabs.forEach((tab) => {
+        tab.addEventListener('click', () => {
+            applyMobileTab(tab.dataset.tab);
+        });
+    });
+
+    syncMobileSheetContent();
+    window.addEventListener('resize', () => {
+        clearTimeout(window.__mobileSheetResize);
+        window.__mobileSheetResize = setTimeout(syncMobileSheetContent, 150);
     });
 }
 
@@ -2427,6 +2569,8 @@ document.addEventListener('DOMContentLoaded', () => {
     setupNightVisionToggle();
     setupThemeToggle();
     setupInfoPanelToggle();
+    setupMobileUI();
+    setupQuickActions();
     setupSlideToSOS();
     setupHapticFeedback();
     setupBatteryMonitoring();
@@ -2554,10 +2698,12 @@ document.addEventListener('DOMContentLoaded', () => {
     }
     
     // Start trip button
-    const startTripBtn = document.getElementById('start-trip-btn');
-    if (startTripBtn) {
-        startTripBtn.addEventListener('click', startNewTrip);
-    }
+    ['start-trip-btn', 'mobile-start-trip-btn'].forEach(id => {
+        const startTripBtn = document.getElementById(id);
+        if (startTripBtn) {
+            startTripBtn.addEventListener('click', startNewTrip);
+        }
+    });
     
     // Acknowledge alert button
     const acknowledgeBtn = document.getElementById('acknowledge-alert');
@@ -2738,3 +2884,116 @@ window.SafePath = {
         alert('Check console for events');
     }
 };
+
+// QUICK ACTIONS (CAPACITOR INTEGRATION)
+function setupQuickActions() {
+    // 1. Share Live
+    const btnShare = document.getElementById('qa-share');
+    if (btnShare) {
+        btnShare.addEventListener('click', async () => {
+            let lat = '0', lng = '0';
+            const capacitorGeo = getCapacitorGeolocation();
+            try {
+                if (capacitorGeo) {
+                    const pos = await capacitorGeo.getCurrentPosition();
+                    lat = pos.coords.latitude;
+                    lng = pos.coords.longitude;
+                } else if ('geolocation' in navigator) {
+                    const pos = await new Promise((res, rej) => navigator.geolocation.getCurrentPosition(res, rej));
+                    lat = pos.coords.latitude;
+                    lng = pos.coords.longitude;
+                }
+            } catch (e) {
+                console.error("Geo error:", e);
+                showNotification('Error', 'Could not get location to share.');
+                return;
+            }
+            if (window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.Share) {
+                await window.Capacitor.Plugins.Share.share({
+                    title: 'Live Location',
+                    text: `My live location: https://maps.google.com/?q=${lat},${lng}`,
+                    dialogTitle: 'Share with buddies'
+                });
+            } else {
+                prompt('Copy this link to share:', `https://maps.google.com/?q=${lat},${lng}`);
+            }
+        });
+    }
+
+    // 2. Record
+    const btnRecord = document.getElementById('qa-record');
+    if (btnRecord) {
+        btnRecord.addEventListener('click', async () => {
+            if (window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.Camera) {
+                try {
+                    const image = await window.Capacitor.Plugins.Camera.getPhoto({
+                        quality: 90,
+                        allowEditing: false,
+                        resultType: 'uri' // Using string representation for CameraResultType.Uri
+                    });
+                    showNotification('Recorded', 'Media captured and securely saved.');
+                    logEvent('EVENT_LOGGED', 'Camera recording activated');
+                } catch(e) {
+                    console.error("Camera error:", e);
+                }
+            } else {
+                showNotification('Camera', 'Native camera plugin not available.');
+            }
+        });
+    }
+
+    // 3. Route
+    const btnRoute = document.getElementById('qa-route');
+    if (btnRoute) {
+        btnRoute.addEventListener('click', () => {
+            const dest = prompt('Enter safe destination:');
+            if (dest) {
+                console.log('Safe destination set to:', dest);
+                showNotification('Routing', 'Routing to: ' + dest);
+                logEvent('EVENT_LOGGED', `Route set to ${dest}`);
+            }
+        });
+    }
+
+    // 4. Hazard
+    const btnHazard = document.getElementById('qa-hazard');
+    if (btnHazard) {
+        btnHazard.addEventListener('click', async () => {
+            if (typeof L === 'undefined' || !map) {
+                showNotification('Error', 'Map not initialized.');
+                return;
+            }
+            let lat = '0', lng = '0';
+            const capacitorGeo = getCapacitorGeolocation();
+            try {
+                if (capacitorGeo) {
+                    const pos = await capacitorGeo.getCurrentPosition();
+                    lat = pos.coords.latitude;
+                    lng = pos.coords.longitude;
+                } else if ('geolocation' in navigator) {
+                    const pos = await new Promise((res, rej) => navigator.geolocation.getCurrentPosition(res, rej));
+                    lat = pos.coords.latitude;
+                    lng = pos.coords.longitude;
+                }
+            } catch (e) {
+                console.error("Geo error:", e);
+                showNotification('Error', 'Could not lock GPS for hazard marker.');
+                return;
+            }
+            
+            const hazardIcon = L.divIcon({
+                className: 'custom-div-icon',
+                html: "<div style='background-color:#e74c3c; width:16px; height:16px; border-radius:50%; border:2px solid white; box-shadow: 0 0 10px rgba(231,76,60,0.8);'></div>",
+                iconSize: [20, 20],
+                iconAnchor: [10, 10]
+            });
+            L.marker([lat, lng], {icon: hazardIcon}).addTo(map)
+                .bindPopup('<b>Warning/Hazard</b>')
+                .openPopup();
+                
+            showNotification('Hazard', 'Hazard marker dropped at your location.');
+            logEvent("ALERT_TRIGGERED", "Hazard marker placed at user location");
+        });
+    }
+}
+

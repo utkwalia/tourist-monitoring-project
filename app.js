@@ -4,6 +4,9 @@
 // ===== APPLICATION STATE =====
 let currentUser = null;
 let map = null;
+let primaryTiles = null;
+let darkTiles = null;
+let fallbackTiles = null;
 let userMarker = null;
 let watchId = null;
 let geofences = [];
@@ -124,14 +127,21 @@ function initMap(lat = 40.7128, lng = -74.0060) {
         map.zoomControl.setPosition('topright');
         
         // Use CartoDB Voyager for desaturated map style, with OSM fallback
-        const primaryTiles = L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', {
+        primaryTiles = L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', {
+            attribution: '&copy; OpenStreetMap contributors &copy; CARTO',
+            subdomains: 'abcd',
+            maxZoom: 19,
+            minZoom: 2
+        });
+        
+        darkTiles = L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
             attribution: '&copy; OpenStreetMap contributors &copy; CARTO',
             subdomains: 'abcd',
             maxZoom: 19,
             minZoom: 2
         });
 
-        const fallbackTiles = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        fallbackTiles = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
             attribution: '&copy; OpenStreetMap contributors',
             subdomains: 'abc',
             maxZoom: 19,
@@ -139,15 +149,24 @@ function initMap(lat = 40.7128, lng = -74.0060) {
         });
 
         let tileLayerSwitched = false;
-        primaryTiles.on('tileerror', () => {
+        const handleTileError = () => {
             if (tileLayerSwitched) return;
             tileLayerSwitched = true;
-            map.removeLayer(primaryTiles);
+            if (map.hasLayer(primaryTiles)) map.removeLayer(primaryTiles);
+            if (map.hasLayer(darkTiles)) map.removeLayer(darkTiles);
             fallbackTiles.addTo(map);
             console.warn('Primary tiles failed to load, switched to OSM fallback.');
-        });
+        };
+        
+        primaryTiles.on('tileerror', handleTileError);
+        darkTiles.on('tileerror', handleTileError);
 
-        primaryTiles.addTo(map);
+        const isDark = document.body.classList.contains('dark-theme');
+        if (isDark) {
+            darkTiles.addTo(map);
+        } else {
+            primaryTiles.addTo(map);
+        }
         
         // Add custom user marker with pulse effect
         const customIcon = L.divIcon({
@@ -1695,6 +1714,16 @@ function setupNightVisionToggle() {
 function applyThemePreference(isDark) {
     document.body.classList.toggle('dark-theme', isDark);
     updateThemeToggleIcon(isDark);
+    
+    if (map && primaryTiles && darkTiles) {
+        if (isDark) {
+            if (map.hasLayer(primaryTiles)) map.removeLayer(primaryTiles);
+            if (!map.hasLayer(darkTiles)) darkTiles.addTo(map);
+        } else {
+            if (map.hasLayer(darkTiles)) map.removeLayer(darkTiles);
+            if (!map.hasLayer(primaryTiles)) primaryTiles.addTo(map);
+        }
+    }
 }
 
 function updateThemeToggleIcon(isDark) {

@@ -52,6 +52,16 @@
 
     <!-- Main Dashboard -->
     <div id="dashboard-screen" class="screen">
+        <!-- Mobile Header -->
+        <div class="mobile-header mobile-only">
+            <div class="mobile-header-left">
+                <i class="fas fa-shield-alt"></i>
+                <span>SafePath</span>
+            </div>
+            <button class="mobile-avatar" aria-label="User profile">
+                <i class="fas fa-user-circle"></i>
+            </button>
+        </div>
         <!-- Header -->
         <header class="header">
             <div class="header-content">
@@ -85,16 +95,66 @@
             </div>
         </div>
 
+        <!-- Mobile Map Status Pill -->
+        <div class="mobile-status-pill mobile-only">
+            <span class="pill-icon">✅</span>
+            <span class="pill-text">All systems nominal</span>
+            <i class="fas fa-chevron-right"></i>
+        </div>
+
         <!-- Main Content -->
         <div class="main-content">
             <!-- Map Container -->
-            <div id="map" class="map-container"></div>
+            <div class="map-shell">
+                <div id="map" class="map-container"></div>
+            </div>
+
+            <!-- Mobile Middle Content (Extracted for Flex Order) -->
+            <div class="mobile-middle-content mobile-only">
+                <!-- Status Cards -->
+                <div class="mobile-status-cards">
+                    <div class="mobile-status-card status-green">
+                        <div class="status-icon"><i class="fas fa-check-circle"></i></div>
+                        <div class="status-body">
+                            <strong>All systems nominal</strong>
+                            <span>Your safety circle is watching</span>
+                        </div>
+                    </div>
+                </div>
+
+        <!-- Quick Actions -->
+        <div class="mobile-quick-actions">
+            <div class="mobile-quick-action" id="qa-share">
+                <i class="fas fa-share-nodes"></i>
+                <span>Share Live</span>
+            </div>
+            <div class="mobile-quick-action" id="qa-record">
+                <i class="fas fa-microphone"></i>
+                <span>Record</span>
+            </div>
+            <div class="mobile-quick-action" id="qa-route">
+                <i class="fas fa-route"></i>
+                <span>Route</span>
+            </div>
+            <div class="mobile-quick-action" id="qa-hazard">
+                <i class="fas fa-triangle-exclamation"></i>
+                <span>Hazard</span>
+            </div>
+        </div>
+            </div>
+
+            <!-- Mobile Bottom Utilities -->
+            <div class="mobile-bottom-utilities-wrapper mobile-only" id="mobile-bottom-utilities-wrapper">
+                <!-- Javascript dynamically moves all Trapped Content here on mobile -->
+            </div>
+
 
             <!-- Controls Panel -->
             <div class="controls-panel">
                 <button id="panel-toggle-btn" class="panel-toggle-btn" aria-label="Hide Info Panel" title="Hide Info Panel">
                     <i class="fas fa-chevron-right"></i>
                 </button>
+                <div class="controls-scroll-area">
                 <!-- Safety Readiness -->
                 <div class="panel-section">
                     <h3><i class="fas fa-list-check"></i> Safety Readiness</h3>
@@ -284,6 +344,7 @@
                     <h3 style="margin-top: 1rem;"><i class="fas fa-clipboard-list"></i> Audit Trail</h3>
                     <div id="audit-trail-list" class="smart-list"></div>
                 </div>
+                </div>
             </div>
         </div>
 
@@ -350,6 +411,64 @@
             <div class="sos-prealert-actions">
                 <button id="cancel-sos-btn" class="btn-secondary">Cancel</button>
                 <button id="send-sos-now-btn" class="btn-primary">Send Now</button>
+            </div>
+        </div>
+
+        <!-- Mobile Map Pills + SOS Trigger -->
+        <div class="mobile-gps-pill mobile-only" id="mobile-gps-pill">
+            GPS Active • 28.496853, 77.522942
+        </div>
+        <button class="mobile-sos-btn mobile-only" id="mobile-sos-btn">SOS</button>
+
+        <!-- Mobile Bottom Sheet -->
+        <div class="mobile-sheet mobile-only" id="mobile-sheet">
+            <div class="mobile-sheet-handle"></div>
+            <div class="mobile-sheet-header">
+                <span class="pill-icon">✅</span>
+                <div class="mobile-sheet-title">
+                    <strong>All systems nominal</strong>
+                    <span>Your safety circle is watching</span>
+                </div>
+                <span class="mobile-sheet-tag">Pending</span>
+            </div>
+            <div class="mobile-sheet-tabs">
+                <button class="mobile-sheet-tab active" data-tab="safety">Safety</button>
+                <button class="mobile-sheet-tab" data-tab="trip">Trip</button>
+                <button class="mobile-sheet-tab" data-tab="presets">Presets</button>
+            </div>
+            <div class="mobile-sheet-content" id="mobile-sheet-content"></div>
+        </div>
+
+        <!-- Mobile Bottom Navigation -->
+        <nav class="mobile-nav mobile-only">
+            <button class="mobile-nav-item active" id="mobile-nav-map">
+                <i class="fas fa-map"></i>
+                <span>Map</span>
+            </button>
+            <button class="mobile-nav-item" id="mobile-nav-trip">
+                <i class="fas fa-route"></i>
+                <span>Trip</span>
+            </button>
+            <button class="mobile-nav-item" id="mobile-nav-safety">
+                <i class="fas fa-shield-alt"></i>
+                <span>Safety</span>
+                <span class="mobile-nav-badge">1</span>
+            </button>
+            <button class="mobile-nav-item" id="mobile-nav-settings">
+                <i class="fas fa-gear"></i>
+                <span>Settings</span>
+            </button>
+        </nav>
+
+        <!-- SOS Overlay -->
+        <div class="mobile-sos-overlay mobile-only" id="mobile-sos-overlay">
+            <div class="mobile-sos-content">
+                <h2>SOS in 7 s</h2>
+                <p>Cancel now if this was accidental.</p>
+                <div class="mobile-sos-ripple">
+                    <div class="mobile-sos-button">SOS</div>
+                </div>
+                <button class="mobile-sos-cancel" id="mobile-sos-cancel">Cancel</button>
             </div>
         </div>
     </div>
