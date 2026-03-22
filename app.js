@@ -509,28 +509,108 @@ function runNightSafetyCheck() {
     }
 }
 
-function getLocalizedHelpPhrase() {
-    return HELLO_PHRASES[currentCountry] || HELLO_PHRASES.default;
-}
+const countryToLangMap = {
+    'IN': 'hi', 'FR': 'fr', 'ES': 'es', 'DE': 'de', 'IT': 'it', 'JP': 'ja', 'MX': 'es', 'BR': 'pt'
+};
+const DEFAULT_HELP_PHRASE = "Please help me. I am in danger. Please call an emergency.";
+let currentHelpPhrase = DEFAULT_HELP_PHRASE;
+let currentVoiceLang = "en";
 
-function updateLanguageBridgeUI() {
+async function updateLanguageBridgeUI() {
     const phraseEl = document.getElementById('help-phrase-text');
     if (!phraseEl) return;
-    const phrase = getLocalizedHelpPhrase();
-    phraseEl.textContent = phrase.text;
+    
+    // Prevent redundant API calls if we already successfully translated it for the current country
+    // Using a simple flag or just trusting the initial load. Since it's called multiple times, let's keep it simple.
+    
+    try {
+        let lat, lng;
+        const capacitorGeo = getCapacitorGeolocation();
+        if (isNativeCapacitor() && capacitorGeo) {
+            const pos = await capacitorGeo.getCurrentPosition();
+            lat = pos.coords.latitude;
+            lng = pos.coords.longitude;
+        } else if ("geolocation" in navigator) {
+            const pos = await new Promise((res, rej) => navigator.geolocation.getCurrentPosition(res, rej));
+            lat = pos.coords.latitude;
+            lng = pos.coords.longitude;
+        } else {
+            throw new Error("Geolocation unavailable");
+        }
+
+        const geoResponse = await fetch(`https://api.bigdatacloud.net/data/reverse-geocode-client?latitude=${lat}&longitude=${lng}&localityLanguage=en`);
+        if (!geoResponse.ok) throw new Error('Geocoding failed');
+        const geoData = await geoResponse.json();
+        
+        const targetLang = countryToLangMap[geoData.countryCode] || "en";
+
+        if (targetLang === 'en') {
+            currentHelpPhrase = DEFAULT_HELP_PHRASE;
+            currentVoiceLang = 'en';
+        } else {
+            const translateResponse = await fetch(`https://api.mymemory.translated.net/get?q=${encodeURIComponent(DEFAULT_HELP_PHRASE)}&langpair=en|${targetLang}`);
+            if (!translateResponse.ok) throw new Error('Translation failed');
+            const translateData = await translateResponse.json();
+            
+            if (translateData.responseData && translateData.responseData.translatedText) {
+                currentHelpPhrase = translateData.responseData.translatedText;
+                currentVoiceLang = targetLang;
+            } else {
+                throw new Error("Translation payload invalid");
+            }
+        }
+    } catch (error) {
+        console.warn("Language Bridge fallback triggered:", error);
+        currentHelpPhrase = DEFAULT_HELP_PHRASE;
+        currentVoiceLang = "en";
+    } finally {
+        if (phraseEl) phraseEl.textContent = currentHelpPhrase;
+    }
 }
 
 function playHelpPhrase() {
-    const phrase = getLocalizedHelpPhrase();
     if (!('speechSynthesis' in window)) {
-        alert('Speech synthesis is not supported in this browser.');
+        showNotification('Unavailable', 'Text-to-speech is not supported on this device.');
         return;
     }
-    const utterance = new SpeechSynthesisUtterance(phrase.text);
-    utterance.lang = phrase.lang;
-    utterance.rate = 0.95;
     window.speechSynthesis.cancel();
+    const utterance = new SpeechSynthesisUtterance(currentHelpPhrase);
+    utterance.lang = currentVoiceLang;
+    utterance.rate = 0.9;
     window.speechSynthesis.speak(utterance);
+}
+
+async function translateCustomPhrase() {
+    const inputEl = document.getElementById('custom-help-phrase-input');
+    const phraseEl = document.getElementById('help-phrase-text');
+    if (!inputEl || !phraseEl) return;
+    
+    const userInput = inputEl.value.trim();
+    if (!userInput) return;
+    
+    phraseEl.textContent = 'Translating...';
+    
+    try {
+        if (currentVoiceLang === 'en') {
+            currentHelpPhrase = userInput;
+        } else {
+            const response = await fetch(`https://api.mymemory.translated.net/get?q=${encodeURIComponent(userInput)}&langpair=en|${currentVoiceLang}`);
+            if (!response.ok) throw new Error('Translation API failed');
+            const data = await response.json();
+            
+            if (data.responseData && data.responseData.translatedText) {
+                currentHelpPhrase = data.responseData.translatedText;
+            } else {
+                throw new Error("Invalid translation response");
+            }
+        }
+    } catch (error) {
+        console.error("Custom Translation failed:", error);
+        currentHelpPhrase = userInput;
+        currentVoiceLang = 'en';
+    } finally {
+        phraseEl.textContent = currentHelpPhrase;
+    }
 }
 
 // ===== UX HARDENING (PHASE 4) =====
@@ -2742,6 +2822,11 @@ document.addEventListener('DOMContentLoaded', () => {
     const playPhraseBtn = document.getElementById('play-help-phrase-btn');
     if (playPhraseBtn) {
         playPhraseBtn.addEventListener('click', playHelpPhrase);
+    }
+    
+    const translatePhraseBtn = document.getElementById('translate-custom-phrase-btn');
+    if (translatePhraseBtn) {
+        translatePhraseBtn.addEventListener('click', translateCustomPhrase);
     }
 
     const playLastAudioBtn = document.getElementById('play-last-audio-btn');

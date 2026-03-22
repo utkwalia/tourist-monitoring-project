@@ -1932,7 +1932,7 @@ position: absolute;
         position: relative !important;
     }
     .sos-slide-thumb {
-        position: static !important;
+        position: absolute !important;
         width: 54px !important;
         height: 54px !important;
         border-radius: 27px !important;
@@ -1942,7 +1942,6 @@ position: absolute;
         display: flex !important;
         align-items: center !important;
         justify-content: center !important;
-        transform: none !important;
         z-index: 2;
         font-size: 1.2rem !important;
     }
@@ -1955,16 +1954,11 @@ position: absolute;
         padding: 0 !important;
         color: var(--m-text) !important;
         font-weight: 700 !important;
+        font-size: 1.15rem !important;
         letter-spacing: 1px;
         z-index: 1;
-        font-size: 0 !important; /* hide default text */
+        pointer-events: none !important;
     }
-    .sos-slide-label::after {
-        content: 'HOLD TO SEND SOS';
-        font-size: 1.15rem;
-        text-shadow: 0 0 10px rgba(231, 76, 60, 0.5);
-    }
-    .sos-slide-progress { display: none !important; }
 
     /* Bottom Utilities (order: 6) */
     /* Bottom Utilities Wrapper (order: 6) */
