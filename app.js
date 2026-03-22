@@ -2291,8 +2291,38 @@ function setupSlideToSOS() {
         if (e.cancelable) e.preventDefault(); // Prevent scrolling while sliding
         handleMove(e.touches[0].clientX);
     }, { passive: false });
-    
-    document.addEventListener('touchend', () => handleRelease());
+    const onTouchEnd = (e) => {
+        if (!isDragging || triggered) return;
+        
+        if (e && e.changedTouches && e.changedTouches.length > 0) {
+            currentX = e.changedTouches[0].clientX - startX;
+            currentX = Math.max(0, Math.min(currentX, maxDrag));
+        }
+        
+        isDragging = false;
+        
+        if (currentX >= maxDrag * 0.9) {
+            triggered = true;
+            currentX = maxDrag;
+            slideThumb.style.transition = 'transform 0.3s ease';
+            slideProgress.style.transition = 'width 0.3s ease';
+            slideThumb.style.transform = `translateX(${maxDrag}px)`;
+            slideProgress.style.width = '100%';
+            slideLabel.textContent = 'SOS SENT!';
+            triggerSOS();
+        } else {
+            isDragging = false;
+            slideLabel.textContent = 'SLIDE FOR SOS';
+            slideThumb.style.transition = 'transform 0.3s ease';
+            slideProgress.style.transition = 'width 0.3s ease';
+            slideThumb.style.transform = 'translateX(0px)';
+            slideProgress.style.width = '0%';
+            currentX = 0;
+        }
+    };
+
+    document.addEventListener('touchend', onTouchEnd);
+    document.addEventListener('touchcancel', onTouchEnd);
     
     // Exposed globally for any reset needs after emergency is cleared
     window.resetSOSSliderState = function() {
