@@ -117,7 +117,7 @@ const emergencyNumbers = {
 };
 
 // ===== MAP INITIALIZATION =====
-function initMap(lat = 40.7128, lng = -74.0060) {
+function initMap(lat = 28.4744, lng = 77.5040) {
     if (map) {
         map.invalidateSize();
         return;
@@ -233,6 +233,8 @@ function initMap(lat = 40.7128, lng = -74.0060) {
 
 // ===== LOCATION TRACKING =====
 function startLocationTracking() {
+    if (isGuestMode) return;
+    
     if (!map) {
         console.log('Map not ready, delaying location tracking');
         setTimeout(startLocationTracking, 500);
@@ -251,7 +253,7 @@ function startLocationTracking() {
                 }
                 const position = await capacitorGeo.getCurrentPosition({
                     enableHighAccuracy: true,
-                    timeout: 10000
+                    timeout: 5000
                 });
                 handlePositionUpdate(position);
                 setGpsStatus('active');
@@ -261,8 +263,11 @@ function startLocationTracking() {
                 setGpsStatus('error');
                 signalStrength = false;
                 updateSignalIndicator();
-                updateUserLocation(40.7128, -74.0060);
-                detectCountryFromLocation(40.7128, -74.0060);
+                updateUserLocation(28.4744, 77.5040);
+                detectCountryFromLocation(28.4744, 77.5040);
+                
+                const coordDisplay = document.getElementById('coordinate-display');
+                if (coordDisplay) coordDisplay.innerHTML = '📍 Using Fallback GPS';
             }
 
             restartAdaptiveLocationWatch();
@@ -285,12 +290,15 @@ function startLocationTracking() {
                 setGpsStatus('error');
                 signalStrength = false;
                 updateSignalIndicator();
-                updateUserLocation(40.7128, -74.0060);
-                detectCountryFromLocation(40.7128, -74.0060);
+                updateUserLocation(28.4744, 77.5040);
+                detectCountryFromLocation(28.4744, 77.5040);
+                
+                const coordDisplay = document.getElementById('coordinate-display');
+                if (coordDisplay) coordDisplay.innerHTML = '📍 Using Fallback GPS';
             },
             {
                 enableHighAccuracy: true,
-                timeout: 10000,
+                timeout: 5000,
                 maximumAge: 0
             }
         );
@@ -302,7 +310,9 @@ function startLocationTracking() {
 
     console.log("Geolocation not supported");
     setGpsStatus('error');
-    updateUserLocation(40.7128, -74.0060);
+    updateUserLocation(28.4744, 77.5040);
+    const coordDisplay = document.getElementById('coordinate-display');
+    if (coordDisplay) coordDisplay.innerHTML = '📍 Using Fallback GPS';
 }
 
 function updateUserLocation(lat, lng) {
