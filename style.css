@@ -2238,3 +2238,46 @@ position: absolute;
 ::-webkit-scrollbar-thumb:hover {
     background: var(--theme-scrollbar-thumb-hover);
 }
+
+/* Guest Mode Overrides */
+body.guest-mode .controls-panel,
+body.guest-mode .right-side-panel,
+body.guest-mode .sos-slide-container,
+body.guest-mode #mobile-sos-btn,
+body.guest-mode .mobile-sos-overlay,
+body.guest-mode .header-actions,
+body.guest-mode .mobile-middle-content,
+body.guest-mode .mobile-bottom-utilities-wrapper,
+body.guest-mode .mobile-nav,
+body.guest-mode .mobile-header-left,
+body.guest-mode #mobile-nav-settings,
+body.guest-mode #start-trip-btn,
+body.guest-mode .fa-gear {
+    display: none !important;
+}
+
+body.guest-mode .map-shell {
+    width: 100vw !important;
+    max-width: 100vw !important;
+    height: 100vh !important;
+    border-radius: 0 !important;
+    position: absolute !important;
+    top: 0 !important;
+    left: 0 !important;
+    z-index: 0 !important;
+}
+
+body.guest-mode .main-content {
+    grid-template-columns: 100% !important;
+    padding: 0 !important;
+    max-width: 100vw !important;
+    height: 100vh !important;
+    gap: 0 !important;
+    display: block !important;
+}
+
+body.guest-mode .header {
+    pointer-events: none;
+    position: relative;
+    z-index: 1000;
+}

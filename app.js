@@ -2958,10 +2958,50 @@ document.addEventListener('DOMContentLoaded', async () => {
         }
 
         // Process token payload
-        currentUser = { email: 'guest@safepath.app', id: share.user_id };
-        document.getElementById('user-email').textContent = 'Guest View';
+        
+        const coordDisplay = document.getElementById('coordinate-display');
+        if (coordDisplay) coordDisplay.style.display = 'none'; // remove loader
+        
+        let hostLat = 28.4744;
+        let hostLng = 77.5040;
+        let hostEmail = "Host User";
+        
+        try {
+            const { data: profile } = await supabase.from('profiles').select('*').eq('id', share.user_id).single();
+            if (profile) {
+                hostEmail = profile.email || profile.full_name || "Host User";
+                if (profile.last_lat && profile.last_lng) {
+                    hostLat = parseFloat(profile.last_lat);
+                    hostLng = parseFloat(profile.last_lng);
+                }
+            }
+        } catch (e) {
+            console.warn('Could not fetch host profile for name/location, using fallbacks.');
+        }
+
+        currentUser = { email: `Monitoring: ${hostEmail}`, id: share.user_id };
+        document.getElementById('user-email').textContent = currentUser.email;
         showSkeletonLoading();
-        setTimeout(() => initMap(), 500);
+        
+        setTimeout(() => {
+            initMap(hostLat, hostLng);
+            
+            if (userMarker) {
+                userMarker.bindPopup('Host Location').openPopup();
+                const markerIcon = document.querySelector('.user-marker');
+                if (markerIcon) {
+                    markerIcon.style.background = 'var(--red)';
+                    markerIcon.textContent = '🚨';
+                }
+            }
+            
+            // Read-Only Map: Disable any drawing routing
+            if (map && map.pm) {
+                map.pm.disableDraw();
+                map.pm.removeControls();
+            }
+        }, 500);
+
         showNotification('Live Tracking Started', 'You are now securely viewing the host\'s location.');
         
         // Essential UI
