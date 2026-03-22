@@ -1052,7 +1052,7 @@ async function createEmergencyShareLink() {
         if (error) throw error;
 
         const token = data.token;
-        const link = `${window.location.origin}${window.location.pathname}?guest=${token}`;
+        const link = `${window.location.origin}${window.location.pathname}#emergency-share=${token}`;
 
         const links = purgeExpiredShareLinks();
         links.unshift({
@@ -2917,10 +2917,21 @@ function demoLogin() {
 document.addEventListener('DOMContentLoaded', async () => {
     console.log('SafePath app starting...');
 
-    const urlParams = new URLSearchParams(window.location.search);
-    const guestToken = urlParams.get('guest');
+    const hash = window.location.hash;
+    if (hash.startsWith('#emergency-share=')) {
+        // UI Override: Hide login completely to prevent flash
+        const loginContainer = document.querySelector('.login-container');
+        if (loginContainer) loginContainer.style.display = 'none';
+        
+        document.body.classList.add('guest-mode');
+        document.getElementById('login-screen').classList.remove('active');
+        document.getElementById('dashboard-screen').classList.add('active');
+        
+        // Halt normal auth check behavior flag
+        isGuestMode = true;
 
-    if (guestToken) {
+        const guestToken = hash.replace('#emergency-share=', '');
+
         const { data: share, error } = await supabase
             .from('active_shares')
             .select('*')
@@ -2929,16 +2940,12 @@ document.addEventListener('DOMContentLoaded', async () => {
 
         if (error || !share || new Date() > new Date(share.expires_at)) {
             alert('This emergency tracking link has expired or is invalid');
-            window.location.href = window.location.origin + window.location.pathname;
+            history.replaceState(null, null, ' ');
+            window.location.reload();
             return;
         }
 
-        // Valid guest bypass
-        document.body.classList.add('guest-mode');
-        document.getElementById('login-screen').classList.remove('active');
-        document.getElementById('dashboard-screen').classList.add('active');
-        
-        isGuestMode = true;
+        // Process token payload
         currentUser = { email: 'guest@safepath.app', id: share.user_id };
         document.getElementById('user-email').textContent = 'Guest View';
         showSkeletonLoading();
