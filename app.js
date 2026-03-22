@@ -2552,6 +2552,15 @@ function dispatchSOS(isSilent) {
         lastLocation = userMarker.getLatLng();
     }
     
+    // Force an instant broadcast to listening guests regardless of GPS movement
+    if (hostChannel && hostChannel.state === 'joined') {
+        hostChannel.send({
+            type: 'broadcast',
+            event: 'location_update',
+            payload: { lat: lastLocation.lat, lng: lastLocation.lng, isSOS: true }
+        });
+    }
+    
     logSafetyEvent('SOS_MANUAL', {
         location: lastLocation,
         battery_level: getBatteryLevel(),
