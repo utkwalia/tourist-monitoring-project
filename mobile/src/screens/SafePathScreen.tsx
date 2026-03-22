@@ -1,11 +1,13 @@
-import React, { useContext, useMemo, useRef, useState } from 'react';
+import React, { useContext, useMemo, useRef, useState, useEffect } from 'react';
 import {
+  Alert,
   Animated,
   Pressable,
   SafeAreaView,
   ScrollView,
   StyleSheet,
   Text,
+  TextInput,
   View,
   useWindowDimensions,
 } from 'react-native';
@@ -52,6 +54,61 @@ const SafePathScreen: React.FC = () => {
 
   const [sosOpen, setSosOpen] = useState(false);
   const ripple = useRef(new Animated.Value(0)).current;
+
+  // Language Bridge State
+  const [customText, setCustomText] = useState('');
+  const [translatedText, setTranslatedText] = useState('Help phrase loading...');
+  const [targetLang, setTargetLang] = useState('en');
+
+  useEffect(() => {
+    const initLanguageBridge = async () => {
+      try {
+        const geoRes = await fetch('https://ipapi.co/json/');
+        const geoData = await geoRes.json();
+        const countryCode = geoData.country;
+        
+        const countryToLangMap: Record<string, string> = {
+          'IN': 'hi', 'FR': 'fr', 'ES': 'es', 'DE': 'de', 'IT': 'it', 'JP': 'ja', 'MX': 'es', 'BR': 'pt'
+        };
+        const lang = countryToLangMap[countryCode] || 'en';
+        setTargetLang(lang);
+        
+        const defaultText = "Please help me. I am in danger. Please call an emergency.";
+        if (lang === 'en') {
+          setTranslatedText(defaultText);
+        } else {
+          const res = await fetch(`https://api.mymemory.translated.net/get?q=${encodeURIComponent(defaultText)}&langpair=en|${lang}`);
+          const data = await res.json();
+          if (data?.responseData?.translatedText) {
+            setTranslatedText(data.responseData.translatedText);
+          }
+        }
+      } catch (err) {
+        setTranslatedText("Please help me. I am in danger. Please call an emergency.");
+      }
+    };
+    initLanguageBridge();
+  }, []);
+
+  const handleTranslate = async () => {
+    if (!customText.trim()) return;
+    setTranslatedText('Translating...');
+    if (targetLang === 'en') {
+      setTranslatedText(customText);
+      return;
+    }
+    try {
+      const res = await fetch(`https://api.mymemory.translated.net/get?q=${encodeURIComponent(customText.trim())}&langpair=en|${targetLang}`);
+      const data = await res.json();
+      if (data?.responseData?.translatedText) {
+        setTranslatedText(data.responseData.translatedText);
+      } else {
+        setTranslatedText(customText);
+      }
+    } catch (err) {
+      setTranslatedText(customText);
+    }
+  };
 
   const startRipple = () => {
     ripple.setValue(0);
@@ -159,6 +216,27 @@ const SafePathScreen: React.FC = () => {
             <ActionButton label="Play Last 30s Clip" />
           </View>
         </View>
+
+        <View style={styles.sectionCard}>
+          <View style={styles.sectionHeader}>
+            <Text style={styles.sectionTitle}>Language Bridge</Text>
+            <Text style={styles.sectionMeta}>{targetLang.toUpperCase()}</Text>
+          </View>
+          <View style={{ flexDirection: 'row', gap: 8, marginBottom: 12 }}>
+            <TextInput 
+              style={{ flex: 1, backgroundColor: Colors.navy800, color: Colors.white, paddingHorizontal: 16, paddingVertical: 12, borderRadius: 12 }} 
+              placeholder="Type message in English..." 
+              placeholderTextColor={Colors.slate500}
+              value={customText}
+              onChangeText={setCustomText}
+            />
+            <Pressable style={{ backgroundColor: Colors.teal, paddingHorizontal: 16, justifyContent: 'center', borderRadius: 12 }} onPress={handleTranslate}>
+              <Text style={{ color: Colors.white, fontWeight: '700' }}>Translate</Text>
+            </Pressable>
+          </View>
+          <Text style={{ color: Colors.slate300, marginBottom: 16, lineHeight: 22 }}>{translatedText}</Text>
+          <ActionButton label="Play Local Help Phrase" onPress={() => Alert.alert('TTS Module Required', 'Native Text-to-Speech requires react-native-tts module to be installed before playback will execute.')} />
+        </View>
       </ScrollView>
 
       <View style={styles.gpsPill}>
@@ -245,8 +323,10 @@ const InfoRow: React.FC<{ label: string; value: string }> = ({ label, value }) =
   </View>
 );
 
-const ActionButton: React.FC<{ label: string }> = ({ label }) => (
-  <Pressable style={styles.actionBtn}><Text style={styles.actionBtnText}>{label}</Text></Pressable>
+const ActionButton: React.FC<{ label: string; onPress?: () => void }> = ({ label, onPress }) => (
+  <Pressable style={styles.actionBtn} onPress={onPress}>
+    <Text style={styles.actionBtnText}>{label}</Text>
+  </Pressable>
 );
 
 const BottomNavItem: React.FC<{ label: string; active?: boolean; badge?: string; onPress: () => void }> = ({
