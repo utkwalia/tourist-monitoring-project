@@ -22,29 +22,35 @@
                     <div class="logo">🛡️</div>
                     <h1>SafePath</h1>
                     <p class="tagline">Explore freely, return safely.</p>
-                    <span class="demo-badge">DEMO MODE</span>
                 </div>
 
                 <div class="form-container">
-                    <h2>Start Your Safe Journey</h2>
+                    <h2 id="auth-header-title">Welcome Back</h2>
                     <form id="login-form">
+                        <div class="input-group hidden-auth" id="group-fullname">
+                            <input type="text" id="fullname" placeholder="Full Name">
+                            <i class="fas fa-user input-icon"></i>
+                        </div>
                         <div class="input-group">
-                            <input type="email" id="email" placeholder="Email" value="demo@safepath.com" required>
+                            <input type="email" id="email" placeholder="Email" required>
                             <i class="fas fa-envelope input-icon"></i>
                         </div>
-                        <div class="input-group">
-                            <input type="password" id="password" placeholder="Password" value="demo123" required>
+                        <div class="input-group" id="group-password">
+                            <input type="password" id="password" placeholder="Password" required>
                             <i class="fas fa-lock input-icon"></i>
                         </div>
-                        <button type="submit" class="btn-primary">
-                            <span>Sign In / Sign Up</span>
+                        <div class="input-group hidden-auth" id="group-confirmpass">
+                            <input type="password" id="confirm-password" placeholder="Confirm Password">
+                            <i class="fas fa-lock input-icon"></i>
+                        </div>
+                        <a href="#" id="forgot-password-link" class="auth-forgot">Forgot Password?</a>
+                        <button type="submit" class="btn-primary" id="auth-submit-btn">
+                            <span id="auth-submit-text">Sign In</span>
                             <i class="fas fa-arrow-right"></i>
                         </button>
                     </form>
-                    <p class="demo-note">
-                        <i class="fas fa-info-circle"></i>
-                        Demo Mode: Click Sign In to continue
-                    </p>
+                    <p class="auth-toggle-text" id="auth-toggle-container">Don't have an account? <span id="auth-toggle-btn" class="auth-toggle-link">Sign Up</span></p>
+                    <p class="auth-toggle-text hidden-auth" id="auth-reset-container"><span id="auth-reset-btn" class="auth-toggle-link">Back to Sign In</span></p>
                 </div>
             </div>
         </div>
@@ -484,7 +490,14 @@
 
     <!-- Scripts -->
     <script src="https://unpkg.com/leaflet@1.7.1/dist/leaflet.js"></script>
-    <script src="app.js"></script>
+    <script type="importmap">
+      {
+        "imports": {
+          "@supabase/supabase-js": "https://cdn.jsdelivr.net/npm/@supabase/supabase-js/+esm"
+        }
+      }
+    </script>
+    <script type="module" src="app.js"></script>
 </body>
 
 </html>

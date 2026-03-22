@@ -1,6 +1,12 @@
 // app.js - SafePath Complete Version
 // All rights reserved
 
+import { createClient } from '@supabase/supabase-js';
+
+const supabaseUrl = 'https://jniscsnnbwxzxcslecsh.supabase.co';
+const supabaseKey = 'sb_publishable_vVsSnbjUbWdG1ljvkEhYQA_edCZk8dH';
+const supabase = createClient(supabaseUrl, supabaseKey);
+
 // ===== APPLICATION STATE =====
 let currentUser = null;
 let map = null;
@@ -2610,11 +2616,17 @@ function logLocation(locationData) {
 
 // ===== DEMO LOGIN =====
 function demoLogin() {
-    currentUser = DEMO_USER;
+    // Clone DEMO_USER to prevent permanent overriding and apply dynamically entered values
+    currentUser = { ...DEMO_USER };
+    
+    const emailInput = document.getElementById('email');
+    if (emailInput && emailInput.value) {
+        currentUser.email = emailInput.value;
+    }
     
     document.getElementById('login-screen').classList.remove('active');
     document.getElementById('dashboard-screen').classList.add('active');
-    document.getElementById('user-email').textContent = DEMO_USER.email;
+    document.getElementById('user-email').textContent = currentUser.email;
     
     showSkeletonLoading();
     
@@ -2669,12 +2681,133 @@ document.addEventListener('DOMContentLoaded', () => {
     }
     readinessRefreshInterval = setInterval(updateSafetyReadinessUI, 10000);
     
+    // Auth Toggle Logic
+    let isSignUpMode = false;
+    let isResetMode = false;
+    const authToggleBtn = document.getElementById('auth-toggle-btn');
+    const authHeaderTitle = document.getElementById('auth-header-title');
+    const authSubmitText = document.getElementById('auth-submit-text');
+    const groupFullname = document.getElementById('group-fullname');
+    const groupPassword = document.getElementById('group-password');
+    const groupConfirmpass = document.getElementById('group-confirmpass');
+    const forgotPasswordLink = document.getElementById('forgot-password-link');
+    const authToggleContainer = document.getElementById('auth-toggle-container');
+    const authResetContainer = document.getElementById('auth-reset-container');
+    const authResetBtn = document.getElementById('auth-reset-btn');
+
+    const toggleAuthMode = () => {
+        if (isResetMode) isResetMode = false; // Ensure reset is off
+        isSignUpMode = !isSignUpMode;
+        if (isSignUpMode) {
+            authHeaderTitle.textContent = 'Create an Account';
+            groupFullname.classList.remove('hidden-auth');
+            groupConfirmpass.classList.remove('hidden-auth');
+            forgotPasswordLink.classList.add('hidden-auth');
+            authSubmitText.textContent = 'Create Account';
+            authToggleBtn.textContent = 'Sign In';
+            authToggleContainer.firstChild.textContent = 'Already have an account? ';
+        } else {
+            authHeaderTitle.textContent = 'Welcome Back';
+            groupFullname.classList.add('hidden-auth');
+            groupConfirmpass.classList.add('hidden-auth');
+            forgotPasswordLink.classList.remove('hidden-auth');
+            authSubmitText.textContent = 'Sign In';
+            authToggleBtn.textContent = 'Sign Up';
+            authToggleContainer.firstChild.textContent = "Don't have an account? ";
+        }
+    };
+
+    const toggleResetMode = () => {
+        isResetMode = !isResetMode;
+        if (isResetMode) {
+            isSignUpMode = false;
+            authHeaderTitle.textContent = 'Reset Password';
+            groupFullname.classList.add('hidden-auth');
+            groupPassword.classList.add('hidden-auth');
+            document.getElementById('password').removeAttribute('required');
+            groupConfirmpass.classList.add('hidden-auth');
+            forgotPasswordLink.classList.add('hidden-auth');
+            authToggleContainer.classList.add('hidden-auth');
+            authResetContainer.classList.remove('hidden-auth');
+            authSubmitText.textContent = 'Send Reset Link';
+        } else {
+            authHeaderTitle.textContent = 'Welcome Back';
+            groupPassword.classList.remove('hidden-auth');
+            document.getElementById('password').setAttribute('required', 'true');
+            forgotPasswordLink.classList.remove('hidden-auth');
+            authToggleContainer.classList.remove('hidden-auth');
+            authResetContainer.classList.add('hidden-auth');
+            authSubmitText.textContent = 'Sign In';
+            authToggleBtn.textContent = 'Sign Up';
+            authToggleContainer.firstChild.textContent = "Don't have an account? ";
+        }
+    };
+
+    if (authToggleBtn) {
+        authToggleBtn.addEventListener('click', toggleAuthMode);
+    }
+    
+    if (forgotPasswordLink) {
+        forgotPasswordLink.addEventListener('click', (e) => {
+            e.preventDefault();
+            toggleResetMode();
+        });
+    }
+
+    if (authResetBtn) {
+        authResetBtn.addEventListener('click', toggleResetMode);
+    }
+
     // Login form
     const loginForm = document.getElementById('login-form');
     if (loginForm) {
-        loginForm.addEventListener('submit', (e) => {
+        loginForm.addEventListener('submit', async (e) => {
             e.preventDefault();
-            demoLogin();
+            const emailInput = document.getElementById('email').value;
+
+            if (isResetMode) {
+                const { error } = await supabase.auth.resetPasswordForEmail(emailInput);
+                if (error) {
+                    alert('Error: ' + error.message);
+                } else {
+                    alert('Reset link sent to your email!');
+                    toggleResetMode(); // Switch back to Sign In
+                }
+            } else if (isSignUpMode) {
+                const passwordInput = document.getElementById('password').value;
+                const fullNameInput = document.getElementById('fullname').value;
+                const { error } = await supabase.auth.signUp({
+                    email: emailInput,
+                    password: passwordInput,
+                    options: { data: { full_name: fullNameInput } }
+                });
+                
+                if (error) {
+                    alert('Error: ' + error.message);
+                } else {
+                    alert('Account created! Please check your email to verify.');
+                    document.getElementById('password').value = '';
+                    toggleAuthMode(); // Switch back to Sign In
+                }
+            } else {
+                const passwordInput = document.getElementById('password').value;
+                const { data, error } = await supabase.auth.signInWithPassword({
+                    email: emailInput,
+                    password: passwordInput
+                });
+                
+                if (error) {
+                    alert('Error: ' + error.message);
+                } else {
+                    // Update global state and transition to dashboard
+                    currentUser = { email: emailInput, ...data.user };
+                    document.getElementById('login-screen').classList.remove('active');
+                    document.getElementById('dashboard-screen').classList.add('active');
+                    document.getElementById('user-email').textContent = currentUser.email;
+                    showSkeletonLoading();
+                    setTimeout(() => initMap(), 500);
+                }
+            }
         });
     }
     
