@@ -1034,29 +1034,42 @@ function purgeExpiredShareLinks() {
     return active;
 }
 
-function createEmergencyShareLink() {
+async function createEmergencyShareLink() {
     const minutes = parseInt(prompt('Link expiry in minutes:', '30'), 10);
     if (!minutes || minutes <= 0) return;
     const expiresAt = new Date(Date.now() + minutes * 60000).toISOString();
-    const location = userMarker ? userMarker.getLatLng() : { lat: 40.7128, lng: -74.0060 };
-    const token = generateUUID();
-    const link = `${window.location.origin}${window.location.pathname}#emergency-share=${token}`;
+    
+    const { data: { user }, error: authError } = await supabase.auth.getUser();
+    if (authError || !user) {
+        alert('You must be logged in to create a share link.');
+        return;
+    }
 
-    const links = purgeExpiredShareLinks();
-    links.unshift({
-        id: token,
-        url: link,
-        createdAt: new Date().toISOString(),
-        expiresAt,
-        payload: {
-            user: currentUser ? currentUser.email : 'demo-user',
-            location
-        }
-    });
-    setShareLinks(links.slice(0, 12));
-    renderShareLinks();
-    recordAudit('EMERGENCY_LINK_CREATED', { expiresAt }, 'warning');
-    showNotification('Emergency share ready', `Expires in ${minutes} minutes.`);
+    try {
+        const { data, error } = await supabase.from('active_shares').insert([
+            { user_id: user.id, expires_at: expiresAt }
+        ]).select('token').single();
+        if (error) throw error;
+
+        const token = data.token;
+        const link = `${window.location.origin}${window.location.pathname}?guest=${token}`;
+
+        const links = purgeExpiredShareLinks();
+        links.unshift({
+            id: token,
+            url: link,
+            createdAt: new Date().toISOString(),
+            expiresAt,
+            payload: { user: user.email }
+        });
+        setShareLinks(links.slice(0, 12));
+        renderShareLinks();
+        recordAudit('EMERGENCY_LINK_CREATED', { expiresAt }, 'warning');
+        showNotification('Emergency share ready', `Expires in ${minutes} minutes.`);
+    } catch (err) {
+        console.error('Share generation failed', err);
+        alert('Failed to generate tracking link.');
+    }
 }
 
 function renderShareLinks() {
@@ -1164,12 +1177,21 @@ function handlePositionUpdate(position) {
         logLocation({ latitude, longitude, accuracy, speed, mode: profile.mode });
     }
 
+    if (hostChannel && hostChannel.state === 'joined') {
+        hostChannel.send({
+            type: 'broadcast',
+            event: 'location_update',
+            payload: { lat: latitude, lng: longitude, isSOS: isSOSActive }
+        });
+    }
+
     signalStrength = true;
     updateSignalIndicator();
     updateSafetyReadinessUI();
 }
 
 function restartAdaptiveLocationWatch() {
+    if (isGuestMode) return;
     const capacitorGeo = getCapacitorGeolocation();
 
     const simulatedPosition = {
@@ -2892,8 +2914,72 @@ function demoLogin() {
 }
 
 // ===== INITIALIZATION =====
-document.addEventListener('DOMContentLoaded', () => {
+document.addEventListener('DOMContentLoaded', async () => {
     console.log('SafePath app starting...');
+
+    const urlParams = new URLSearchParams(window.location.search);
+    const guestToken = urlParams.get('guest');
+
+    if (guestToken) {
+        const { data: share, error } = await supabase
+            .from('active_shares')
+            .select('*')
+            .eq('token', guestToken)
+            .single();
+
+        if (error || !share || new Date() > new Date(share.expires_at)) {
+            alert('This emergency tracking link has expired or is invalid');
+            window.location.href = window.location.origin + window.location.pathname;
+            return;
+        }
+
+        // Valid guest bypass
+        document.body.classList.add('guest-mode');
+        document.getElementById('login-screen').classList.remove('active');
+        document.getElementById('dashboard-screen').classList.add('active');
+        
+        isGuestMode = true;
+        currentUser = { email: 'guest@safepath.app', id: share.user_id };
+        document.getElementById('user-email').textContent = 'Guest View';
+        showSkeletonLoading();
+        setTimeout(() => initMap(), 500);
+        showNotification('Live Tracking Started', 'You are now securely viewing the host\'s location.');
+        
+        // Essential UI
+        setupMobileUI();
+        setupThemeToggle();
+        
+        const guestChannel = supabase.channel(`tracking-${share.user_id}`);
+        guestChannel.on('broadcast', { event: 'location_update' }, (payload) => {
+            const { lat, lng, isSOS } = payload.payload;
+            if (userMarker) {
+                userMarker.setLatLng([lat, lng]);
+                map.setView([lat, lng]);
+            } else {
+                userMarker = L.marker([lat, lng]).addTo(map);
+                map.setView([lat, lng], 15);
+            }
+            
+            const pill = document.getElementById('mobile-gps-pill');
+            if (pill) {
+                pill.innerHTML = isSOS ? `🚨 SOS ACTIVE • ${lat.toFixed(6)}, ${lng.toFixed(6)}` : `GPS Active • ${lat.toFixed(6)}, ${lng.toFixed(6)}`;
+                pill.style.background = isSOS ? 'var(--red)' : 'var(--m-glass-bg)';
+            }
+            
+            const statusCard = document.getElementById('status-card');
+            if (statusCard) {
+                if (isSOS) {
+                     statusCard.className = 'status-card status-critical';
+                     statusCard.innerHTML = `<div class="status-indicator red"></div><div class="status-text"><strong>SOS ACTIVE</strong><span>Host in danger</span></div>`;
+                } else {
+                     statusCard.className = 'status-card';
+                     statusCard.innerHTML = `<div class="status-indicator green"></div><div class="status-text"><strong>All systems nominal</strong><span>Host safe</span></div>`;
+                }
+            }
+        }).subscribe();
+        
+        return;
+    }
     
     silentSOSMode = localStorage.getItem('silentSOSMode') === 'true';
 
@@ -3060,6 +3146,10 @@ document.addEventListener('DOMContentLoaded', () => {
                     document.getElementById('dashboard-screen').classList.add('active');
                     document.getElementById('user-email').textContent = currentUser.email;
                     showSkeletonLoading();
+                    
+                    hostChannel = supabase.channel(`tracking-${currentUser.id}`);
+                    hostChannel.subscribe();
+                    
                     setTimeout(() => initMap(), 500);
                     loadVaultDocuments();
                 }
