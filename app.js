@@ -861,50 +861,135 @@ function base64ToBytes(text) {
 }
 
 async function addVaultDocument() {
-    if (!window.crypto || !window.crypto.subtle) {
-        alert('Secure vault requires WebCrypto support.');
-        return;
-    }
-    const title = prompt('Document title:', 'Passport Number');
-    if (!title) return;
-    const content = prompt('Paste document text to encrypt:');
-    if (!content) return;
-    const passphrase = prompt('Set vault passphrase (needed to decrypt later):');
-    if (!passphrase) return;
-
-    const salt = crypto.getRandomValues(new Uint8Array(16));
-    const iv = crypto.getRandomValues(new Uint8Array(12));
-    const key = await deriveVaultKey(passphrase, salt);
-    const encoded = new TextEncoder().encode(content);
-    const cipherBuffer = await crypto.subtle.encrypt({ name: 'AES-GCM', iv }, key, encoded);
-
-    const entries = getVaultEntries();
-    entries.unshift({
-        id: generateUUID(),
-        title,
-        createdAt: new Date().toISOString(),
-        salt: bytesToBase64(salt),
-        iv: bytesToBase64(iv),
-        cipher: bytesToBase64(cipherBuffer)
-    });
-    setVaultEntries(entries.slice(0, 30));
-    renderVaultList();
-    recordAudit('VAULT_DOC_ADDED', { title }, 'info');
-    showNotification('Vault updated', `${title} stored with encryption.`);
+    const fileInput = document.getElementById('vault-upload');
+    if (fileInput) fileInput.click();
 }
 
-function renderVaultList() {
-    const container = document.getElementById('vault-docs-list');
-    if (!container) return;
-    const entries = getVaultEntries();
-    if (entries.length === 0) {
-        container.innerHTML = '<p class="smart-subtle">No secure docs stored.</p>';
+async function handleVaultUpload(event) {
+    const file = event.target.files[0];
+    if (!file) return;
+
+    const { data: { user }, error: authError } = await supabase.auth.getUser();
+    if (authError || !user) {
+        console.error('No authenticated user found for vault upload.');
+        event.target.value = '';
         return;
     }
-    container.innerHTML = entries.slice(0, 6).map(item => {
-        const date = new Date(item.createdAt).toLocaleDateString();
-        return `<div class="vault-item"><button class="vault-open-btn" data-doc-id="${item.id}">${item.title}</button><span>${date}</span></div>`;
-    }).join('');
+
+    const btn = document.getElementById('add-vault-doc-btn');
+    const originalText = btn.innerHTML;
+    
+    btn.disabled = true;
+    btn.innerHTML = `<i class="fas fa-spinner fa-spin"></i> Uploading...`;
+
+    const safeName = file.name.replace(/[^a-zA-Z0-9.\-_]/g, '_');
+    const filePath = `${user.id}/${Date.now()}_${safeName}`;
+    
+    try {
+        const { data, error } = await supabase.storage.from('secure_vault').upload(filePath, file, {
+            cacheControl: '3600',
+            upsert: false,
+            contentType: file.type
+        });
+        
+        if (error) throw error;
+        
+        btn.innerHTML = originalText;
+        btn.disabled = false;
+        event.target.value = '';
+        
+        loadVaultDocuments();
+        
+        showNotification('Vault updated', `${file.name} securely uploaded.`);
+        recordAudit('VAULT_DOC_UPLOADED', { filename: file.name }, 'info');
+    } catch (err) {
+        console.error('Vault upload failed:', err);
+        btn.innerHTML = originalText;
+        btn.disabled = false;
+        event.target.value = '';
+        alert('Failed to upload document: ' + (err.message || 'Unknown error'));
+    }
+}
+
+async function loadVaultDocuments() {
+    const { data: { user }, error } = await supabase.auth.getUser();
+    if (error || !user) return;
+
+    const container = document.getElementById('vault-docs-list');
+    if (!container) return;
+
+    try {
+        const { data, error: listError } = await supabase.storage.from('secure_vault').list(user.id);
+        if (listError) throw listError;
+
+        if (!data || data.length === 0) {
+            container.innerHTML = '<p class="smart-subtle">No secure docs stored.</p>';
+            return;
+        }
+
+        const files = data.filter(file => file.name !== '.emptyFolderPlaceholder');
+
+        if (files.length === 0) {
+            container.innerHTML = '<p class="smart-subtle">No secure docs stored.</p>';
+            return;
+        }
+
+        container.innerHTML = files.map(file => {
+            const date = new Date(file.created_at || Date.now()).toLocaleDateString();
+            return `<div class="vault-item">
+                        <div class="vault-open-btn" style="cursor:default;"><i class="fas fa-file"></i> ${file.name}</div>
+                        <div style="display:flex; align-items:center;">
+                            <span>${date}</span>
+                            <button class="vault-delete-btn" data-filename="${file.name}" aria-label="Delete document">
+                                <i class="fas fa-times"></i>
+                            </button>
+                        </div>
+                    </div>`;
+        }).join('');
+
+        const deleteBtns = container.querySelectorAll('.vault-delete-btn');
+        deleteBtns.forEach(btn => {
+            btn.addEventListener('click', async (e) => {
+                const fileName = e.currentTarget.getAttribute('data-filename');
+                await deleteVaultDocument(fileName);
+            });
+        });
+    } catch (err) {
+        console.error('Failed to load vault documents:', err);
+        container.innerHTML = '<p class="smart-subtle">No secure docs stored.</p>';
+    }
+}
+
+async function deleteVaultDocument(fileName) {
+    const { data: { user }, error: authError } = await supabase.auth.getUser();
+    if (authError || !user) {
+        console.error('No authenticated user found for vault delete.');
+        return;
+    }
+
+    const filePath = `${user.id}/${fileName}`;
+    if (!window.confirm('Are you sure you want to delete this document?')) {
+        return;
+    }
+
+    try {
+        const { data, error } = await supabase.storage.from('secure_vault').remove([filePath]);
+        if (error) throw error;
+        
+        // Supabase `.remove()` silently returns an empty array instead of throwing an error 
+        // if your Row Level Security (RLS) policy doesn't explicitly allow DELETE operations.
+        if (!data || data.length === 0) {
+            throw new Error("Supabase rejected the deletion. Please ensure you have added a 'DELETE' policy for your 'secure_vault' bucket in your RLS settings.");
+        }
+        
+        showNotification('Vault updated', `${fileName} securely deleted.`);
+        recordAudit('VAULT_DOC_DELETED', { filename: fileName }, 'warning');
+        
+        loadVaultDocuments();
+    } catch (err) {
+        console.error('Failed to delete vault document:', err);
+        alert('Failed to delete document: ' + (err.message || JSON.stringify(err)));
+    }
 }
 
 async function openVaultDocument(docId) {
@@ -2842,7 +2927,7 @@ document.addEventListener('DOMContentLoaded', () => {
     setInterval(flushPendingEvents, 30000);
     updateHotelStatusUI();
     updateLanguageBridgeUI();
-    renderVaultList();
+    loadVaultDocuments();
     renderShareLinks();
     renderAuditTrail();
     updateSafetyReadinessUI();
@@ -2976,6 +3061,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     document.getElementById('user-email').textContent = currentUser.email;
                     showSkeletonLoading();
                     setTimeout(() => initMap(), 500);
+                    loadVaultDocuments();
                 }
             }
         });
@@ -3142,6 +3228,11 @@ document.addEventListener('DOMContentLoaded', () => {
     const addVaultDocBtn = document.getElementById('add-vault-doc-btn');
     if (addVaultDocBtn) {
         addVaultDocBtn.addEventListener('click', addVaultDocument);
+    }
+
+    const vaultUploadInput = document.getElementById('vault-upload');
+    if (vaultUploadInput) {
+        vaultUploadInput.addEventListener('change', handleVaultUpload);
     }
 
     const createShareBtn = document.getElementById('create-share-link-btn');

@@ -412,6 +412,36 @@ h4,
     margin-top: 10px;
 }
 
+.btn-secondary {
+    padding: 12px 24px;
+    background: transparent;
+    color: var(--theme-heading);
+    border: 2px solid var(--theme-input-border);
+    border-radius: 12px;
+    font-size: 1rem;
+    font-weight: var(--weight-semibold);
+    cursor: pointer;
+    transition: all 0.3s ease;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    font-family: var(--font-ui);
+    width: 100%;
+}
+
+.btn-secondary:disabled, .btn-primary:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+    pointer-events: none;
+}
+
+.btn-secondary:hover:not(:disabled) {
+    background: var(--theme-input-bg);
+    border-color: var(--theme-input-border-hover);
+    transform: translateY(-2px);
+}
+
 .btn-primary:hover {
     background: var(--emerald);
     transform: translateY(-2px);
@@ -1183,10 +1213,41 @@ body:not(.dark-theme) .header .btn-text {
     background: none;
     border: none;
     color: var(--theme-heading);
-    font-size: 0.8rem;
-    font-weight: var(--weight-semibold);
     cursor: pointer;
+    font-size: 0.85rem;
     padding: 0;
+    text-align: left;
+    transition: color 0.3s;
+    font-weight: var(--weight-medium);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    min-width: 0;
+    flex-grow: 1;
+    margin-right: 10px;
+}
+
+.vault-open-btn:hover,
+.share-copy-btn:hover {
+    color: var(--teal);
+}
+
+.vault-delete-btn {
+    background: none;
+    border: none;
+    color: var(--theme-item-muted);
+    cursor: pointer;
+    font-size: 0.9rem;
+    padding: 2px 4px;
+    margin-left: 8px;
+    transition: color 0.2s ease;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.vault-delete-btn:hover {
+    color: var(--red);
 }
 
 .share-qr {
