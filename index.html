@@ -36,11 +36,17 @@
                             <i class="fas fa-envelope input-icon"></i>
                         </div>
                         <div class="input-group" id="group-password">
-                            <input type="password" id="password" placeholder="Password" required>
+                            <div class="password-wrapper">
+                                <input type="password" id="password" placeholder="Password" required>
+                                <i class="fas fa-eye toggle-password"></i>
+                            </div>
                             <i class="fas fa-lock input-icon"></i>
                         </div>
                         <div class="input-group hidden-auth" id="group-confirmpass">
-                            <input type="password" id="confirm-password" placeholder="Confirm Password">
+                            <div class="password-wrapper">
+                                <input type="password" id="confirm-password" placeholder="Confirm Password">
+                                <i class="fas fa-eye toggle-password"></i>
+                            </div>
                             <i class="fas fa-lock input-icon"></i>
                         </div>
                         <a href="#" id="forgot-password-link" class="auth-forgot">Forgot Password?</a>
@@ -324,8 +330,8 @@
                 <div class="panel-section">
                     <h3><i class="fas fa-language"></i> Language Bridge</h3>
                     <div style="display: flex; gap: 8px; margin-bottom: 12px; align-items: stretch;">
-                        <input type="text" id="custom-help-phrase-input" placeholder="Type message in English..." autocomplete="off" style="flex-grow: 1; background: var(--m-icon-bg); border: 1px solid var(--m-glass-border); border-radius: 12px; padding: 10px 14px; color: var(--m-text); outline: none;">
-                        <button id="translate-custom-phrase-btn" class="btn-secondary" style="padding: 0 16px; border-radius: 12px; height: auto;">
+                        <input type="text" id="custom-help-phrase-input" placeholder="Type message in English..." autocomplete="off" style="flex-grow: 1; min-width: 0; background: var(--m-icon-bg, var(--theme-input-bg)); border: 1px solid var(--m-glass-border, var(--theme-input-border)); border-radius: 12px; padding: 10px 14px; color: var(--m-text, var(--theme-text)); outline: none; margin: 0;">
+                        <button id="translate-custom-phrase-btn" class="btn-secondary" style="padding: 0 16px !important; border-radius: 12px !important; height: auto !important; width: auto !important; margin: 0 !important; flex-shrink: 0;">
                             Translate
                         </button>
                     </div>

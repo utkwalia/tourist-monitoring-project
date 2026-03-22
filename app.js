@@ -48,6 +48,17 @@ let deadmanLastClipUrl = null;
 let readinessRefreshInterval = null;
 let criticalActionArm = {};
 let nightVisionEnabled = false;
+let sirenAudio = new Audio('https://assets.mixkit.co/active_storage/sfx/994/994-preview.mp3');
+sirenAudio.loop = true;
+
+function stopSiren() {
+    try {
+        if (sirenAudio) {
+            sirenAudio.pause();
+            sirenAudio.currentTime = 0;
+        }
+    } catch(e) {}
+}
 
 const EVENT_API_URL = 'http://localhost:3000/api/events';
 const EVENT_LOGS_KEY = 'safepath_events';
@@ -1529,6 +1540,9 @@ async function startDeadmanAmbientCapture() {
                 });
                 const cutoff = Date.now() - 30000;
                 deadmanAudioChunks = deadmanAudioChunks.filter(chunk => chunk.timestamp >= cutoff);
+                
+                const playBtn = document.getElementById('play-last-audio-btn');
+                if (playBtn) playBtn.disabled = false;
             }
         };
         deadmanMediaRecorder.onstop = () => {
@@ -1557,11 +1571,33 @@ function stopDeadmanAmbientCapture() {
 }
 
 function playLastCapturedClip() {
-    if (!deadmanLastClipUrl) {
+    let clipUrl = deadmanLastClipUrl;
+
+    if (deadmanMediaRecorder && deadmanMediaRecorder.state === 'recording' && deadmanAudioChunks.length > 0) {
+        const recentChunks = deadmanAudioChunks.filter(chunk => chunk.timestamp >= Date.now() - 30000);
+        if (recentChunks.length > 0) {
+            const clip = new Blob(recentChunks.map(c => c.blob), { type: 'audio/webm' });
+            const url = URL.createObjectURL(clip);
+            const audio = new Audio(url);
+            audio.play().catch(() => {
+                showNotification('Playback blocked', 'Tap again after interacting with the page.');
+            });
+        } else if (clipUrl) {
+            const audio = new Audio(clipUrl);
+            audio.play().catch(() => {
+                showNotification('Playback blocked', 'Tap again after interacting with the page.');
+            });
+        } else {
+            showNotification('No clip available', 'Start a safety timer to capture ambient audio.');
+        }
+        return;
+    }
+
+    if (!clipUrl) {
         showNotification('No clip available', 'Start a safety timer to capture ambient audio.');
         return;
     }
-    const audio = new Audio(deadmanLastClipUrl);
+    const audio = new Audio(clipUrl);
     audio.play().catch(() => {
         showNotification('Playback blocked', 'Tap again after interacting with the page.');
     });
@@ -1732,6 +1768,50 @@ function toggleSilentSOS(event) {
         statusText.textContent = silentSOSMode ? 'Stealth ON' : 'Stealth OFF';
     }
     document.body.classList.toggle('silent-sos-mode', silentSOSMode);
+    
+    // Mid-Emergency Override:
+    if (silentSOSMode) {
+        const prealertModal = document.getElementById('sos-prealert-modal');
+        const alertModal = document.getElementById('alert-modal');
+        let sosIsActive = false;
+
+        // Strict requirement: Check active status and directly kill siren
+        if (typeof sirenAudio !== 'undefined' && sirenAudio && !sirenAudio.paused) {
+            sosIsActive = true;
+            sirenAudio.pause();
+            sirenAudio.currentTime = 0;
+        }
+
+        // 1. Check boundaries for loud countdown UI
+        if (prealertModal && prealertModal.classList.contains('active')) {
+            sosIsActive = true;
+            prealertModal.classList.remove('active');
+            clearInterval(sosCountdownInterval);
+            dispatchSOS(true); // Convert remaining pre-alert strictly to silent dispatch
+        } 
+        
+        // 2. Check boundaries for full-blown red alarm UI
+        if (alertModal && alertModal.classList.contains('active')) {
+            sosIsActive = true;
+            alertModal.classList.remove('active');
+        }
+
+        if (sosIsActive) {
+            // Strip any remaining flashing or red logic flags returning room to discreet
+            document.querySelectorAll('.critical-armed, .flash-red, .sos-active').forEach(el => {
+                el.classList.remove('critical-armed', 'flash-red', 'sos-active');
+            });
+            
+            updateStatusCard('stealth', { 
+                title: 'Stealth SOS Active', 
+                description: 'Emergency data is being sent silently' 
+            });
+            showNotification('Stealth Mode Activated', 'Siren silenced. Emergency broadcast continues silently.', {
+                duration: 5000,
+                type: 'warning'
+            });
+        }
+    }
 }
 
 // ===== NIGHT VISION TOGGLE =====
@@ -1779,6 +1859,24 @@ function applyNightVisionState({ announce = false } = {}) {
         });
         wellLitPathLayers = [];
     }
+}
+
+// ===== PASSWORD TOGGLE =====
+function setupPasswordToggles() {
+    document.querySelectorAll('.toggle-password').forEach(toggle => {
+        toggle.addEventListener('click', function() {
+            const input = this.closest('.password-wrapper').querySelector('input');
+            if (input.type === 'password') {
+                input.type = 'text';
+                this.classList.remove('fa-eye');
+                this.classList.add('fa-eye-slash');
+            } else {
+                input.type = 'password';
+                this.classList.remove('fa-eye-slash');
+                this.classList.add('fa-eye');
+            }
+        });
+    });
 }
 
 function setupNightVisionToggle() {
@@ -2102,85 +2200,116 @@ function setupSlideToSOS() {
     const slideTrack = slideContainer.querySelector('.sos-slide-track');
     const slideThumb = slideContainer.querySelector('.sos-slide-thumb');
     const slideProgress = slideContainer.querySelector('.sos-slide-progress');
+    const slideLabel = slideContainer.querySelector('.sos-slide-label');
     
-    if (!slideTrack || !slideThumb || !slideProgress) return;
+    if (!slideTrack || !slideThumb || !slideProgress || !slideLabel) return;
+    
+    // Stop native ghost dragging natively
+    slideThumb.ondragstart = () => false;
     
     let isDragging = false;
     let startX = 0;
     let currentX = 0;
-    const maxSlide = slideTrack.offsetWidth - slideThumb.offsetWidth - 10;
+    let maxDrag = 0;
+    let triggered = false;
     
+    // Initial reset of transition properties
+    slideThumb.style.transition = 'none';
+    slideProgress.style.transition = 'none';
+    
+    const handleMove = (clientX) => {
+        if (!isDragging || triggered) return;
+        currentX = clientX - startX;
+        currentX = Math.max(0, Math.min(currentX, maxDrag));
+        
+        slideThumb.style.transform = `translateX(${currentX}px)`;
+        const progressWidth = (currentX / maxDrag) * 100;
+        slideProgress.style.width = progressWidth + '%';
+    };
+    
+    const handleRelease = () => {
+        if (!isDragging || triggered) return;
+        isDragging = false;
+        
+        // 90% threshold for trigger
+        if (currentX >= maxDrag * 0.9) {
+            triggered = true;
+            // Snap to the far right using transition dynamically
+            currentX = maxDrag;
+            slideThumb.style.transition = 'transform 0.3s ease';
+            slideProgress.style.transition = 'width 0.3s ease';
+            slideThumb.style.transform = `translateX(${maxDrag}px)`;
+            slideProgress.style.width = '100%';
+            
+            // Change text
+            slideLabel.textContent = 'SOS SENT!';
+            
+            // Execute placeholder function only once
+            triggerSOS();
+        } else {
+            // Smoothly animate and snap back to left
+            resetSOSSlider();
+        }
+    };
+    
+    // Mouse events
     const onMouseMove = (e) => {
         if (!isDragging) return;
-        
         e.preventDefault();
-        currentX = e.clientX - startX;
-        currentX = Math.max(0, Math.min(currentX, maxSlide));
-        
-        slideThumb.style.left = currentX + 5 + 'px';
-        const progressWidth = (currentX / maxSlide) * 100;
-        slideProgress.style.width = progressWidth + '%';
-        
-        if (currentX >= maxSlide) {
-            triggerSOS();
-            resetSOSSlider();
-        }
+        handleMove(e.clientX);
     };
     
-    const onMouseUp = () => {
-        if (isDragging) {
-            isDragging = false;
-            resetSOSSlider();
-        }
-    };
+    const onMouseUp = () => handleRelease();
     
     slideThumb.addEventListener('mousedown', (e) => {
+        if (triggered) return;
+        e.preventDefault(); // Stop text highlighting and native ghost drags
         isDragging = true;
+        // Calculate maxDrag immediately on touch so bounds are perfect
+        maxDrag = slideTrack.offsetWidth - slideThumb.offsetWidth - 10;
         startX = e.clientX - currentX;
         slideThumb.style.transition = 'none';
         slideProgress.style.transition = 'none';
     });
     
-    document.addEventListener('mousemove', onMouseMove);
+    document.addEventListener('mousemove', onMouseMove, { passive: false });
     document.addEventListener('mouseup', onMouseUp);
     
-    // Touch events
+    // Touch events for mobile
     slideThumb.addEventListener('touchstart', (e) => {
+        if (triggered) return;
+        // Don't preventDefault here to allow scrolling if they touch but don't drag
         isDragging = true;
+        maxDrag = slideTrack.offsetWidth - slideThumb.offsetWidth - 10;
         startX = e.touches[0].clientX - currentX;
         slideThumb.style.transition = 'none';
         slideProgress.style.transition = 'none';
-    });
+    }, { passive: true });
     
     document.addEventListener('touchmove', (e) => {
         if (!isDragging) return;
-        e.preventDefault();
-        currentX = e.touches[0].clientX - startX;
-        currentX = Math.max(0, Math.min(currentX, maxSlide));
-        
-        slideThumb.style.left = currentX + 5 + 'px';
-        const progressWidth = (currentX / maxSlide) * 100;
-        slideProgress.style.width = progressWidth + '%';
-        
-        if (currentX >= maxSlide) {
-            triggerSOS();
-            resetSOSSlider();
-        }
-    });
+        if (e.cancelable) e.preventDefault(); // Prevent scrolling while sliding
+        handleMove(e.touches[0].clientX);
+    }, { passive: false });
     
-    document.addEventListener('touchend', () => {
-        if (isDragging) {
-            isDragging = false;
-            resetSOSSlider();
-        }
-    });
+    document.addEventListener('touchend', () => handleRelease());
+    
+    // Exposed globally for any reset needs after emergency is cleared
+    window.resetSOSSliderState = function() {
+        triggered = false;
+        slideLabel.textContent = 'SLIDE FOR SOS';
+        resetSOSSlider();
+    };
     
     function resetSOSSlider() {
-        slideThumb.style.transition = 'left 0.3s ease';
+        slideThumb.style.transition = 'transform 0.3s ease';
         slideProgress.style.transition = 'width 0.3s ease';
-        slideThumb.style.left = '5px';
+        slideThumb.style.transform = `translateX(0px)`;
         slideProgress.style.width = '0%';
         currentX = 0;
+        if (!triggered) {
+            slideLabel.textContent = 'SLIDE FOR SOS';
+        }
     }
 }
 
@@ -2213,6 +2342,12 @@ function startSOSPreAlert() {
     modal.classList.add('active');
     simulateHaptic('double');
 
+    // Play siren during countdown
+    try {
+        sirenAudio.currentTime = 0;
+        sirenAudio.play();
+    } catch(e) {}
+
     sosCountdownInterval = setInterval(() => {
         sosCountdownRemaining -= 1;
         countdown.textContent = Math.max(0, sosCountdownRemaining).toString();
@@ -2225,6 +2360,7 @@ function startSOSPreAlert() {
 }
 
 function cancelSOSPreAlert() {
+    stopSiren();
     clearInterval(sosCountdownInterval);
     sosCountdownInterval = null;
     const modal = document.getElementById('sos-prealert-modal');
@@ -2238,6 +2374,10 @@ function cancelSOSPreAlert() {
     }
     delete criticalActionArm.sos_send_now;
     showNotification('SOS canceled', 'Emergency alert was not sent.');
+    
+    if (window.resetSOSSliderState) {
+        window.resetSOSSliderState();
+    }
 }
 
 function confirmSOSNow() {
@@ -2298,9 +2438,8 @@ function triggerAlert(title, message) {
     
     if (!silentSOSMode) {
         try {
-            const audio = new Audio('https://www.soundjay.com/misc/sounds/bell-ringing-05.mp3');
-            audio.volume = 0.7;
-            audio.play();
+            // Ensure siren continues or starts
+            sirenAudio.play();
         } catch (e) {
             console.log('Audio play failed');
         }
@@ -2332,7 +2471,7 @@ function showAlertChecklist() {
             <input type="checkbox" class="checklist-checkbox" id="step4">
             <label for="step4">Keep your phone charged</label>
         </div>
-        <button class="btn-primary" onclick="document.getElementById('alert-modal').classList.remove('active')">
+        <button class="btn-primary" onclick="document.getElementById('alert-modal').classList.remove('active'); stopSiren();">
             ✓ I've Completed These Steps
         </button>
     `;
@@ -2658,6 +2797,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
     
     // Setup UI elements
+    setupPasswordToggles();
     setupNightVisionToggle();
     setupThemeToggle();
     setupInfoPanelToggle();
@@ -2922,6 +3062,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const acknowledgeBtn = document.getElementById('acknowledge-alert');
     if (acknowledgeBtn) {
         acknowledgeBtn.addEventListener('click', () => {
+            stopSiren();
             document.getElementById('alert-modal').classList.remove('active');
             
             updateStatusCard('nominal', { 
@@ -2964,7 +3105,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     const playLastAudioBtn = document.getElementById('play-last-audio-btn');
     if (playLastAudioBtn) {
-        playLastAudioBtn.disabled = !deadmanLastClipUrl;
+        playLastAudioBtn.disabled = false;
         playLastAudioBtn.addEventListener('click', playLastCapturedClip);
     }
 
@@ -3038,6 +3179,7 @@ document.addEventListener('DOMContentLoaded', () => {
     // Close modal buttons
     document.querySelectorAll('.close').forEach(closeBtn => {
         closeBtn.addEventListener('click', () => {
+            stopSiren();
             document.getElementById('contact-modal').classList.remove('active');
             document.getElementById('alert-modal').classList.remove('active');
         });

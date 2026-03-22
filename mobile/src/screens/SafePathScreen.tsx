@@ -10,12 +10,56 @@ import {
   TextInput,
   View,
   useWindowDimensions,
+  PanResponder,
 } from 'react-native';
 import { ThemeContext } from '../theme/ThemeContext';
 import { Colors } from '../theme/colors';
 
 const MAP_HEIGHT_RATIO = 0.4;
 const SHEET_HEIGHT_RATIO = 0.58;
+
+const SlideToSOS: React.FC<{ onTrigger: () => void }> = ({ onTrigger }) => {
+  const pan = useRef(new Animated.Value(0)).current;
+  const [trackWidth, setTrackWidth] = useState(0);
+  const thumbWidth = 56;
+
+  const panResponder = useRef(
+    PanResponder.create({
+      onStartShouldSetPanResponder: () => true,
+      onMoveShouldSetPanResponder: () => true,
+      onPanResponderMove: (_, gestureState) => {
+        const maxSlide = trackWidth > 0 ? trackWidth - thumbWidth - 8 : 200;
+        let newX = Math.max(0, Math.min(gestureState.dx, maxSlide));
+        pan.setValue(newX);
+      },
+      onPanResponderRelease: (_, gestureState) => {
+        const maxSlide = trackWidth > 0 ? trackWidth - thumbWidth - 8 : 200;
+        if (gestureState.dx >= maxSlide - 10) {
+          onTrigger();
+        }
+        Animated.spring(pan, { toValue: 0, useNativeDriver: false }).start();
+      },
+    })
+  ).current;
+
+  return (
+    <View 
+      style={styles.sosSliderTrack} 
+      onLayout={(e) => setTrackWidth(e.nativeEvent.layout.width)}
+    >
+      <Text style={styles.sosSliderText}>SLIDE FOR SOS</Text>
+      <Animated.View
+        style={[
+          styles.sosSliderThumb,
+          { transform: [{ translateX: pan }] },
+        ]}
+        {...panResponder.panHandlers}
+      >
+        <Text style={{fontSize: 22}}>⚠️</Text>
+      </Animated.View>
+    </View>
+  );
+};
 
 const SafePathScreen: React.FC = () => {
   const { colors, toggleMode } = useContext(ThemeContext);
@@ -191,9 +235,7 @@ const SafePathScreen: React.FC = () => {
           <QuickAction label="Report Hazard" />
         </View>
 
-        <View style={styles.sosHold}>
-          <Text style={styles.sosHoldText}>HOLD TO SEND SOS</Text>
-        </View>
+        <SlideToSOS onTrigger={showSos} />
 
         <View style={styles.monitorRow}>
           <View style={styles.monitorDot} />
@@ -573,15 +615,41 @@ const styles = StyleSheet.create({
     color: Colors.white,
     fontSize: 11,
   },
-  sosHold: {
+  sosSliderTrack: {
     backgroundColor: Colors.red,
-    borderRadius: 20,
-    paddingVertical: 16,
-    alignItems: 'center',
+    borderRadius: 34,
+    height: 64,
+    justifyContent: 'center',
+    padding: 4,
+    shadowColor: Colors.red,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 10,
+    elevation: 6,
+    overflow: 'hidden',
   },
-  sosHoldText: {
+  sosSliderText: {
+    position: 'absolute',
+    alignSelf: 'center',
     color: Colors.white,
-    fontWeight: '700',
+    fontWeight: '800',
+    fontSize: 16,
+    letterSpacing: 1,
+    zIndex: 0,
+  },
+  sosSliderThumb: {
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    backgroundColor: Colors.white,
+    justifyContent: 'center',
+    alignItems: 'center',
+    zIndex: 1,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.2,
+    shadowRadius: 4,
+    elevation: 3,
   },
   monitorRow: {
     flexDirection: 'row',
