@@ -2281,3 +2281,11 @@ body.guest-mode .header {
     position: relative;
     z-index: 1000;
 }
+
+body.guest-mode .leaflet-right {
+    right: 20px !important;
+}
+
+body.guest-mode .leaflet-top {
+    top: 20px !important;
+}
