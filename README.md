@@ -1,99 +1,61 @@
-<div align="center">
-  <h1>🛡️ SafePath</h1>
-  <p><strong>Smart Tourist Safety & Monitoring Ecosystem</strong></p>
-  <p>Explore freely. Return safely. A beautifully crafted, cross-platform safety application designed to protect travelers with real-time intelligence, ambient tracking, and deep system integrations.</p>
-</div>
+# SafePath - Smart Tourist Safety Application
+
+SafePath is a high-performance, mobile-first web application engineered as a personal safety companion for travelers and tourists. Armed with state-of-the-art geolocation mechanics, encrypted document storage, offline-first capabilities, and instantaneous emergency broadcasting, SafePath guarantees user safety through a beautiful and highly responsive glassmorphism UI.
+
+## 🚀 Key Features
+
+### 📍 Precision Geolocation & Tracking
+- **Adaptive Tracking Profiles**: Dynamically adjusts polling rates depending on activity (walking, driving, stationary) to conserve device battery and maintain precise accuracy.
+- **Geofencing & Safe Zones**: Users can draw completely custom vector polygons (Safe Zones & Restricted Zones) on the map interface. The app automatically pushes location-breach warnings when wandering out of safe boundaries or stumbling into defined hazardous ones.
+- **Offline Tracking Buffer**: If the user goes off the grid or enters a dead zone (e.g. underground metro), GPS tracking continues to log to the `localStorage` queue. Once reconnected to the internet, these logs are automatically batched and pushed natively.
+
+### 🚨 Critical Emergency Systems
+- **Slide-to-SOS Interface**: Built natively into the application header to avoid accidental taps—simply slide right to arm standard or silent alarms.
+- **Hardware Integrations**: Hooks deeply into iOS and Android's native haptic engines via Capacitor to provide silent, tactile confirmation when alerts are armed.
+- **Silent SOS Output**: Allows the user to discreetly dial emergency contacts without flashing the screen or sounding the siren audio.
+- **Supabase Realtime Sync**: A host's SOS broadcast leverages extremely low-latency Supabase channels, instantly alerting linked tracking endpoints the precise millisecond an alarm is confirmed (bypassing the traditional loop requirements of hardware GPS coordinate shifts).
+
+### 👥 "Guest Mode" Live Monitoring
+- **Live Location Sharing**: The host user can rapidly generate an encrypted `#emergency-share=` token link (validating over customizable time restrictions).
+- **Hardened Guest Preemption**: Unauthenticated guests clicking the designated link are fed directly into a purely read-only viewport.
+- **Isolated State**: The UI dynamically strips away controls, settings, side panels, and locks the Leaflet drawing interactions. It automatically subscribes to the host's Supabase broadcast channel, tracking their position instantly across global distances.
+
+### 🔒 Secure Vault
+- **Row Level Security (RLS)**: Documents, passports, and visas are pushed directly into a fully isolated Supabase Storage bucket. Access is strictly governed by cryptographic UUID isolation.
+- **Silent Fail-Safes**: Explicitly crafted to reject and loudly alert users if unauthorized read/delete processes are executed.
+
+### 🌙 Environmental UX
+- **Night Vision Mode**: Instantly shifts the entire UI to a deep, low-luminosity red to preserve the user's rod cells/natural night vision.
+- **Device Theme Sync**: Full, graceful interoperability handling light/dark preferences.
+- **PWA Ready**: Completely standalone architecture ready for Progressive Web Application (PWA) framing.
 
 ---
 
-## 🌟 Key Features
+## 🛠 Technologies & Architecture
 
-* **Advanced Mapping Engine** 🗺️
-  * Powered by Leaflet.js with CartoDB Voyager and Dark Matter tile layers.
-  * Dynamically syncs map layers with the global application theme.
-  * Real-time GPS tracking with accuracy mapping and cached-signal fallbacks.
+SafePath is designed to be extraordinarily fast, completely free of bulky component libraries, and natively portable.
 
-* **Dynamic Glassmorphism UI** 🌔
-  * Premium, responsive interface built with pure Vanilla CSS and JavaScript.
-  * Seamless light-to-dark mode transitions with real-time UI token swapping.
-  * Perfectly adaptive layouts built to feel native on desktop browsers, tablets, and mobile devices (Android/iOS).
+### Frontend
+* **Vanilla JavaScript (ES6+)**: Delivers blistering speeds and strict execution flow without the massive overhead of React or Angular. 
+* **HTML5 / CSS3**: Built with native flexbox/grid architecture enforcing a premium, universally responsive, Frosted-Glass aesthetic suite.
+* **Leaflet.js**: Lightweight and massively modular interactive maps.
+* **Geoman.js (`leaflet.pm`)**: Enables dynamic polygon map drawing mechanisms for customized Geofencing.
 
-* **Threat Intelligence & Safe Zones** 🚨
-  * **Risk Overlays**: Automatically generates expanding risk heatmaps based on area reports.
-  * **Smart Geofencing**: Drop "Safe Zones" or designate a "Hotel Base". The app automatically prompts logic checks if you leave these zones late at night.
-  * **Shadow Track**: High-risk stealth mode that increases background telemetry pacing.
-  
-* **Emergency & SOS Arsenal** 🚑
-  * **Slide-to-SOS**: Physical slider to prevent accidental emergency triggers, featuring critical-action arming and double-tap validations.
-  * **Silent SOS**: "Stealth ON" mode that quietly pings your safety circle without triggering visual or auditory alarms to bystanders.
-  * **Language Bridge**: Instantly generates localized, phonetically translated help-phrases and text-to-speech audio based on your GPS country detecting.
+### Backend & Cloud Sync
+* **Supabase**: Open-source Firebase alternative serving as the absolute central nervous system.
+* **Supabase Auth**: JWT-driven user authentication.
+* **Supabase Realtime**: WebSocket-powered live coordinate data broadcasting (bypassing heavy database insert costs).
+* **Supabase PostgreSQL**: Database scaling and RLS rule enforcement.
+* **Supabase Storage**: Powering the user Secure Vault mechanisms.
 
-* **Privacy & Trust Layer** 🔐
-  * **Secure Vault**: On-device AES-GCM encrypted document storage (for passports, IDs).
-  * **Audit Trail**: Every critical action, geofence breach, or setting toggle is chronologically logged locally.
+### Native Integration Wrapper
+* **Capacitor**: While primarily web-facing, the architecture is specifically injected with modular Capacitor logic to leverage hardware-level GPS fallbacks and device Haptics directly if wrapped into an APK or IPA format.
 
 ---
 
-## 🛠️ Technology Stack
+## 🏗 Setup & Deployment
 
-SafePath is built with a strictly "vanilla-first" approach for maximum performance and portability, wrapped tightly with native bridging tools.
-
-**Frontend:**
-- **HTML5 & CSS3**: Pure, framework-free Glassmorphism design system.
-- **Vanilla JavaScript (ES6+)**: Handles all state management, routing, theme switching, and local cryptography natively.
-- **Leaflet.js**: Lightweight, high-performance mapping core.
-
-**Native Shell / Mobile:**
-- **CapacitorJS**: Wraps the vanilla web application into compiled, native iOS and Android applications. Includes plugins for native Geolocation, Camera, and Push Notifications.
-
-**Backend / Microservices:**
-- **Node.js & Express**: A lightweight event API (`simple-server.js`) for logging telemetries and off-device tracking.
-
----
-
-## 🚀 Running the App
-
-### 1. Web Local Preview
-To run the fully-functional web version locally, simply serve the root directory or the `public/` directory using an HTTP server of your choice:
-```bash
-# Using Node (if installed)
-npx serve .
-
-# Using Python
-python3 -m http.server 5500
-```
-Then navigate to `http://localhost:5500/index.html`.
-
-### 2. Running on Android natively
-Since the application uses Capacitor, it is equipped to run effortlessly in Android Studio.
-```bash
-# Sync the latest web assets to the Android project folder
-npm install
-npx cap sync android
-
-# Open Android Studio 
-npx cap open android
-```
-*(In Android Studio, let Gradle sync complete, select your connected Android device or emulator, and press ▶ Run).*
-
-### 3. Running on iOS natively
-```bash
-# Sync the latest web assets to the iOS project folder
-npm install
-npx cap sync ios
-
-# Open Xcode
-npx cap open ios
-```
-*(In Xcode, select your iPhone or iOS Simulator, and press ▶ Play).*
-
----
-
-## 🎨 Theme & Typography
-
-SafePath heavily utilizes carefully curated gradients and dynamic CSS variables to produce its aesthetic. 
-- **Typography:** Uses Google Fonts (`Inter`, `Lexend`, and `Roboto Mono`) to provide distinct textual hierarchy between readable metrics and large dashboard readouts.
-- **Micro-interactions:** Every button and container features subtle CSS hover transitions, back-drop filters, and transform animations to produce a premium "alive" sensation.
-
----
-> **Disclaimer:** This application is configured to run in "Demo Mode" by default. Ensure adequate notification infrastructure is wired via Capacitor if deploying into environments requiring live external SMS/Push alerts.
+1. **Clone the Repository**
+2. **Environment Setup**: Define your database URL globally within the Supabase initialization block on `app.js`. Ensure you deploy with your `SUPABASE_URL` and `SUPABASE_ANON_KEY`.
+3. **Database Rules**: Active instances require RLS policies specifically granting `INSERT`, `SELECT`, and explicitly `DELETE` targeting the authenticated `auth.uid()`.
+4. **Execution**: SafePath natively spins up over standard HTTP web servers (`LiteServer`, `Vite`, `Live Server`).
