@@ -1,61 +1,103 @@
 # SafePath - Smart Tourist Safety Application
 
-SafePath is a high-performance, mobile-first web application engineered as a personal safety companion for travelers and tourists. Armed with state-of-the-art geolocation mechanics, encrypted document storage, offline-first capabilities, and instantaneous emergency broadcasting, SafePath guarantees user safety through a beautiful and highly responsive glassmorphism UI.
+SafePath is a mobile-first safety dashboard for travelers, built with Vanilla JS + Leaflet + Supabase and packaged for Android/iOS via Capacitor.
 
 ## 🚀 Key Features
 
-### 📍 Precision Geolocation & Tracking
-- **Adaptive Tracking Profiles**: Dynamically adjusts polling rates depending on activity (walking, driving, stationary) to conserve device battery and maintain precise accuracy.
-- **Geofencing & Safe Zones**: Users can draw completely custom vector polygons (Safe Zones & Restricted Zones) on the map interface. The app automatically pushes location-breach warnings when wandering out of safe boundaries or stumbling into defined hazardous ones.
-- **Offline Tracking Buffer**: If the user goes off the grid or enters a dead zone (e.g. underground metro), GPS tracking continues to log to the `localStorage` queue. Once reconnected to the internet, these logs are automatically batched and pushed natively.
+### 🔐 Auth & Sessions
+- **Email/Password + Google OAuth (Supabase v2)**.
+- **Redirect-safe auth boot**: on load, the app checks existing session and listens to `onAuthStateChange`.
+- **Guest-mode bypass preserved** via `#emergency-share=` links.
 
-### 🚨 Critical Emergency Systems
-- **Slide-to-SOS Interface**: Built natively into the application header to avoid accidental taps—simply slide right to arm standard or silent alarms.
-- **Hardware Integrations**: Hooks deeply into iOS and Android's native haptic engines via Capacitor to provide silent, tactile confirmation when alerts are armed.
-- **Silent SOS Output**: Allows the user to discreetly dial emergency contacts without flashing the screen or sounding the siren audio.
-- **Supabase Realtime Sync**: A host's SOS broadcast leverages extremely low-latency Supabase channels, instantly alerting linked tracking endpoints the precise millisecond an alarm is confirmed (bypassing the traditional loop requirements of hardware GPS coordinate shifts).
+### 📍 Map, Tracking & SOS
+- Live geolocation marker + map controls.
+- Emergency + Silent SOS flows with instant UI/state updates.
+- SOS state feeds into safety score in real time.
 
-### 👥 "Guest Mode" Live Monitoring
-- **Live Location Sharing**: The host user can rapidly generate an encrypted `#emergency-share=` token link (validating over customizable time restrictions).
-- **Hardened Guest Preemption**: Unauthenticated guests clicking the designated link are fed directly into a purely read-only viewport.
-- **Isolated State**: The UI dynamically strips away controls, settings, side panels, and locks the Leaflet drawing interactions. It automatically subscribes to the host's Supabase broadcast channel, tracking their position instantly across global distances.
+### 👥 Dynamic Safety Circle (Supabase-backed)
+- Safety contacts are **user-specific** (not local-only).
+- Contacts are fetched from `safety_contacts` on login/session restore.
+- Add contact via **custom themed modal** (dark/light adaptive), remove via per-row action.
+- Safety score updates immediately when contacts change.
 
-### 🔒 Secure Vault
-- **Row Level Security (RLS)**: Documents, passports, and visas are pushed directly into a fully isolated Supabase Storage bucket. Access is strictly governed by cryptographic UUID isolation.
-- **Silent Fail-Safes**: Explicitly crafted to reject and loudly alert users if unauthorized read/delete processes are executed.
+### 🛡 Dynamic Safe Zones (Supabase-backed)
+- Safe zones are **user-specific** and persisted in `safe_zones`.
+- Saved zones are fetched and redrawn on map after auth/session load.
+- Zone remove action deletes DB row and removes corresponding Leaflet layer.
+- “Draw Safe Zone” saves to DB, then refreshes map + list.
 
-### 🌙 Environmental UX
-- **Night Vision Mode**: Instantly shifts the entire UI to a deep, low-luminosity red to preserve the user's rod cells/natural night vision.
-- **Device Theme Sync**: Full, graceful interoperability handling light/dark preferences.
-- **PWA Ready**: Completely standalone architecture ready for Progressive Web Application (PWA) framing.
+### 🧠 Safety Intelligence
+- Real-time `calculateSafetyScore()` with deductions for:
+  - battery level
+  - night hours
+  - missing contacts/hotel base
+  - active SOS type
+  - local hazard toggle
+- Score is clamped to `0..100` and rendered as Low/Moderate/High risk.
+- Includes console diagnostic breakdown for debugging.
+
+### ⚠️ Hazard Logic (Updated)
+- App starts with **no seeded/mock hazards**.
+- Hazard penalty is now **user-driven** (Report Nearby Hazard toggle), avoiding startup false negatives.
+- Nearby hazard counter resets cleanly before each recalculation.
+
+### 🔒 Secure Vault & Sharing
+- Supabase Storage-backed secure vault with user isolation.
+- Emergency share flows and guest read-only tracking mode.
+
+### 🌙 Themes & UX
+- Dedicated dark/light theme toggles.
+- Contact modal adapts instantly to current theme.
+- Mobile-safe spacing and responsive behavior for Capacitor WebView.
 
 ---
 
-## 🛠 Technologies & Architecture
+## 🛠 Tech Stack
 
-SafePath is designed to be extraordinarily fast, completely free of bulky component libraries, and natively portable.
-
-### Frontend
-* **Vanilla JavaScript (ES6+)**: Delivers blistering speeds and strict execution flow without the massive overhead of React or Angular. 
-* **HTML5 / CSS3**: Built with native flexbox/grid architecture enforcing a premium, universally responsive, Frosted-Glass aesthetic suite.
-* **Leaflet.js**: Lightweight and massively modular interactive maps.
-* **Geoman.js (`leaflet.pm`)**: Enables dynamic polygon map drawing mechanisms for customized Geofencing.
-
-### Backend & Cloud Sync
-* **Supabase**: Open-source Firebase alternative serving as the absolute central nervous system.
-* **Supabase Auth**: JWT-driven user authentication.
-* **Supabase Realtime**: WebSocket-powered live coordinate data broadcasting (bypassing heavy database insert costs).
-* **Supabase PostgreSQL**: Database scaling and RLS rule enforcement.
-* **Supabase Storage**: Powering the user Secure Vault mechanisms.
-
-### Native Integration Wrapper
-* **Capacitor**: While primarily web-facing, the architecture is specifically injected with modular Capacitor logic to leverage hardware-level GPS fallbacks and device Haptics directly if wrapped into an APK or IPA format.
+- **Frontend**: HTML5, CSS3, Vanilla JavaScript (ES modules)
+- **Maps**: Leaflet
+- **Backend**: Supabase Auth, Postgres, Realtime, Storage
+- **Mobile packaging**: Capacitor (Android/iOS)
 
 ---
 
-## 🏗 Setup & Deployment
+## 🗃 Required Supabase Tables
 
-1. **Clone the Repository**
-2. **Environment Setup**: Define your database URL globally within the Supabase initialization block on `app.js`. Ensure you deploy with your `SUPABASE_URL` and `SUPABASE_ANON_KEY`.
-3. **Database Rules**: Active instances require RLS policies specifically granting `INSERT`, `SELECT`, and explicitly `DELETE` targeting the authenticated `auth.uid()`.
-4. **Execution**: SafePath natively spins up over standard HTTP web servers (`LiteServer`, `Vite`, `Live Server`).
+### `safety_contacts`
+- `id` (pk)
+- `user_id` (uuid, FK to auth.users.id)
+- `first_name` (text)
+- `last_name` (text)
+- `phone_number` (text)
+- `email` (text)
+- `company` (text)
+- (optional legacy compatibility) `contact_name` (text)
+
+### `safe_zones`
+- `id` (pk)
+- `user_id` (uuid, FK to auth.users.id)
+- `zone_name` (text)
+- `zone_data` (json/jsonb)
+
+> RLS should enforce `user_id = auth.uid()` for `SELECT/INSERT/UPDATE/DELETE`.
+
+---
+
+## 🏗 Local Run
+
+1. Install dependencies:
+   - `npm install`
+2. Start local server:
+   - `npm run dev` (or your configured static server)
+3. Open app in browser and sign in.
+
+## 📱 Capacitor Run (Android)
+
+1. Sync web assets:
+   - `npx cap sync android`
+2. Open Android project:
+   - `npx cap open android`
+3. In Android Studio:
+   - wait for Gradle sync
+   - select device/emulator
+   - run `app`

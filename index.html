@@ -54,6 +54,10 @@
                             <span id="auth-submit-text">Sign In</span>
                             <i class="fas fa-arrow-right"></i>
                         </button>
+                        <div class="divider">
+                            <span>or</span>
+                        </div>
+                        <button type="button" id="google-login-btn" class="oauth-btn">Continue with Google</button>
                     </form>
                     <p class="auth-toggle-text" id="auth-toggle-container">Don't have an account? <span id="auth-toggle-btn" class="auth-toggle-link">Sign Up</span></p>
                     <p class="auth-toggle-text hidden-auth" id="auth-reset-container"><span id="auth-reset-btn" class="auth-toggle-link">Back to Sign In</span></p>
@@ -247,7 +251,7 @@
                         <span class="smart-label">Hotel Base</span>
                         <span id="hotel-status" class="smart-subtle">Not configured</span>
                     </div>
-                    <button id="set-hotel-btn" class="btn-secondary">
+                    <button type="button" id="set-hotel-btn" class="btn-secondary" aria-label="Set Hotel At Current Location">
                         <i class="fas fa-hotel"></i>
                         Set Hotel At Current Location
                     </button>
@@ -385,27 +389,41 @@
         </div>
     </div>
 
-    <!-- Add Contact Modal -->
-    <div id="contact-modal" class="modal">
+    <!-- Add Contact Modal (iOS-style light editor) -->
+    <div id="contact-modal" class="modal contact-editor-modal">
         <div class="modal-content">
-            <span class="close">&times;</span>
-            <h3><i class="fas fa-user-plus"></i> Add to Safety Circle</h3>
-            <div class="input-group">
-                <input type="text" id="contact-name" placeholder="Contact Name" value="John Doe">
-                <i class="fas fa-user input-icon"></i>
+            <div class="contact-editor-topbar">
+                <button type="button" id="contact-editor-cancel" class="contact-editor-action">Cancel</button>
+                <span class="contact-editor-title">New Contact</span>
+                <button type="button" id="save-contact" class="contact-editor-action contact-editor-done">Done</button>
             </div>
-            <div class="input-group">
-                <input type="email" id="contact-email" placeholder="Contact Email" value="john@example.com">
-                <i class="fas fa-envelope input-icon"></i>
+
+            <div class="contact-avatar-placeholder" aria-hidden="true">
+                <span class="avatar-plus">+</span>
             </div>
-            <div class="input-group">
-                <input type="text" id="contact-phone" placeholder="Phone (optional)" value="+91 98765 43210">
-                <i class="fas fa-phone input-icon"></i>
-            </div>
-            <button id="save-contact" class="btn-primary">
-                <i class="fas fa-check"></i>
-                Add Contact
-            </button>
+
+            <form id="contact-editor-form" class="contact-editor-form" autocomplete="off">
+                <div class="contact-editor-field">
+                    <label for="contact-first-name">First Name</label>
+                    <input type="text" id="contact-first-name" placeholder="First Name">
+                </div>
+                <div class="contact-editor-field">
+                    <label for="contact-last-name">Last Name</label>
+                    <input type="text" id="contact-last-name" placeholder="Last Name">
+                </div>
+                <div class="contact-editor-field">
+                    <label for="contact-company">Company</label>
+                    <input type="text" id="contact-company" placeholder="Company">
+                </div>
+                <div class="contact-editor-field">
+                    <label for="contact-phone-number">Phone</label>
+                    <input type="text" id="contact-phone-number" placeholder="Phone">
+                </div>
+                <div class="contact-editor-field">
+                    <label for="contact-email">Email</label>
+                    <input type="email" id="contact-email" placeholder="Email">
+                </div>
+            </form>
         </div>
     </div>
 

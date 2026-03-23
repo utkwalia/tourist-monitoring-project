@@ -19,6 +19,8 @@ let userMarker = null;
 let watchId = null;
 let geofences = [];
 let safetyCircle = [];
+let safetyContacts = [];
+let activeSafeZones = [];
 let currentTrip = null;
 let safetyTimer = null;
 let timerEndTime = null;
@@ -42,6 +44,10 @@ let isFlushingEvents = false;
 let riskOverlayLayers = [];
 let riskPoints = [];
 let hotelBase = null;
+let hotelCoordinates = null;
+let activeSosType = null;
+let nearbyHazardsCount = 0;
+let isLocalHazardReported = false;
 let hotelMonitorInterval = null;
 let lastNightCheckPromptAt = 0;
 let deadmanMediaRecorder = null;
@@ -214,7 +220,13 @@ function initMap(lat = 28.4744, lng = 77.5040) {
         }, 200);
         
         // Load saved data
-        loadGeofencesFromStorage();
+        if (isGuestMode) {
+            loadGeofencesFromStorage();
+        } else if (currentUser && currentUser.id) {
+            fetchSafeZones().catch(error => {
+                console.error('Failed to fetch safe zones after map init:', error);
+            });
+        }
         loadSafetyCircleFromStorage();
         loadSmartSafetyState();
         setupRiskIntelligence();
@@ -226,6 +238,7 @@ function initMap(lat = 28.4744, lng = 77.5040) {
         
         // Start tracking after map loads
         startLocationTracking();
+        updateSafetyScore();
         
         try {
             flushPendingEvents();
@@ -379,39 +392,35 @@ function loadSmartSafetyState() {
         const savedHotel = localStorage.getItem('safepath_hotel_base');
         if (savedHotel) {
             hotelBase = JSON.parse(savedHotel);
+            hotelCoordinates = hotelBase ? { lat: hotelBase.lat, lng: hotelBase.lng } : null;
             ensureHotelGeofence();
+        } else {
+            hotelBase = null;
+            hotelCoordinates = null;
         }
     } catch (error) {
         hotelBase = null;
+        hotelCoordinates = null;
     }
 
-    try {
-        const savedRisk = JSON.parse(localStorage.getItem('safepath_risk_points') || '[]');
-        if (Array.isArray(savedRisk)) {
-            riskPoints = savedRisk;
-        }
-    } catch (error) {
-        riskPoints = [];
-    }
+    // Start with a clean hazard map on each load.
+    riskPoints = [];
+    nearbyHazardsCount = 0;
+    localStorage.removeItem('safepath_risk_points');
 }
 
 function setupRiskIntelligence() {
     if (!map) return;
-    if (riskPoints.length === 0 && userMarker) {
-        seedRiskPointsFromUserLocation();
-    }
-    renderRiskOverlay();
+    riskPoints = [];
+    nearbyHazardsCount = 0;
+    localStorage.removeItem('safepath_risk_points');
+    renderRiskOverlay(); // clears any lingering layers
 }
 
 function seedRiskPointsFromUserLocation() {
-    if (!userMarker) return;
-    const base = userMarker.getLatLng();
-    riskPoints = [
-        { lat: base.lat + 0.004, lng: base.lng + 0.003, severity: 0.7, label: 'Crowd alert' },
-        { lat: base.lat - 0.003, lng: base.lng + 0.005, severity: 0.5, label: 'Low light area' },
-        { lat: base.lat + 0.001, lng: base.lng - 0.004, severity: 0.85, label: 'Recent incident report' }
-    ];
-    localStorage.setItem('safepath_risk_points', JSON.stringify(riskPoints));
+    // Mock/seeded hazards intentionally disabled.
+    riskPoints = [];
+    localStorage.removeItem('safepath_risk_points');
 }
 
 function renderRiskOverlay() {
@@ -432,7 +441,7 @@ function renderRiskOverlay() {
             weight: 1,
             radius
         }).addTo(map);
-        layer.bindPopup(`<strong>${point.label}</strong><br>Risk score: ${Math.round(point.severity * 100)}`);
+        layer.bindPopup(`<strong>${point.label}</strong>`);
         riskOverlayLayers.push(layer);
     });
 }
@@ -449,49 +458,259 @@ function computeSafetyScore(lat, lng) {
     return clamped;
 }
 
-function updateSafetyScore(lat, lng) {
-    const score = computeSafetyScore(lat, lng);
-    const badge = document.getElementById('safety-score-pill');
-    if (badge) {
-        const level = score >= 75 ? 'Low Risk' : score >= 45 ? 'Moderate' : 'High Risk';
-        const color = score >= 75 ? 'var(--emerald)' : score >= 45 ? 'var(--amber)' : 'var(--red)';
-        badge.textContent = `${score}/100 (${level})`;
-        badge.style.color = color;
+function getCurrentSafetyReferencePosition() {
+    if (userMarker) {
+        const pos = userMarker.getLatLng();
+        return { lat: pos.lat, lng: pos.lng };
     }
+    if (map) {
+        const center = map.getCenter();
+        return { lat: center.lat, lng: center.lng };
+    }
+    if (lastProcessedLocation && typeof lastProcessedLocation.lat === 'number' && typeof lastProcessedLocation.lng === 'number') {
+        return { lat: lastProcessedLocation.lat, lng: lastProcessedLocation.lng };
+    }
+    return null;
+}
+
+function countNearbyHazards(referenceLat, referenceLng, radiusMeters = 2000) {
+    if (!Array.isArray(riskPoints) || riskPoints.length === 0) return 0;
+
+    let count = 0;
+    const userLatLng = (typeof L !== 'undefined' && typeof L.latLng === 'function')
+        ? L.latLng(Number(referenceLat), Number(referenceLng))
+        : null;
+
+    riskPoints.forEach((point, index) => {
+        const pointLat = Number(point?.lat);
+        const pointLng = Number(point?.lng);
+        if (!Number.isFinite(pointLat) || !Number.isFinite(pointLng)) {
+            console.log(`Hazard ${point?.id || point?.name || index + 1} has invalid coordinates. Counted: false`);
+            return;
+        }
+
+        let distanceMeters;
+        if (userLatLng && typeof userLatLng.distanceTo === 'function' && typeof L !== 'undefined' && typeof L.latLng === 'function') {
+            const hazardLatLng = L.latLng(pointLat, pointLng);
+            distanceMeters = userLatLng.distanceTo(hazardLatLng);
+        } else {
+            distanceMeters = calculateDistance(Number(referenceLat), Number(referenceLng), pointLat, pointLng);
+        }
+
+        const counted = Number.isFinite(distanceMeters) && distanceMeters <= radiusMeters;
+        console.log(`Hazard ${point?.id || point?.name || index + 1} is ${Math.round(distanceMeters || 0)} meters away. Counted: ${counted}`);
+
+        if (counted) {
+            count += 1;
+        }
+    });
+
+    return count;
+}
+
+async function calculateSafetyScore() {
+    const start = 100;
+    let score = start;
+    let batteryDeduction = 0;
+    let timeDeduction = 0;
+    let contactsDeduction = 0;
+    let hotelDeduction = 0;
+    let hazardsDeduction = 0;
+    let sosDeduction = 0;
+    nearbyHazardsCount = 0;
+
+    try {
+        if ('getBattery' in navigator) {
+            const battery = await navigator.getBattery();
+            const levelPercent = Math.round((battery.level || 0) * 100);
+            batteryLevelPercent = levelPercent;
+            if (levelPercent < 10) {
+                batteryDeduction = -25;
+            } else if (levelPercent < 20) {
+                batteryDeduction = -15;
+            }
+        } else {
+            const levelPercent = Math.round(getBatteryLevel());
+            if (levelPercent < 10) {
+                batteryDeduction = -25;
+            } else if (levelPercent < 20) {
+                batteryDeduction = -15;
+            }
+        }
+    } catch (error) {
+        console.warn('Battery API unavailable for safety score:', error);
+    }
+    score += batteryDeduction;
+
+    const hour = new Date().getHours();
+    if (hour >= 22 || hour <= 5) {
+        timeDeduction = -10;
+    }
+    score += timeDeduction;
+
+    const contactsMissing = safetyContacts.length === 0;
+    if (contactsMissing) {
+        contactsDeduction = -15;
+    }
+    score += contactsDeduction;
+
+    const hotelNotConfigured = !hotelCoordinates;
+    if (hotelNotConfigured) {
+        hotelDeduction = -10;
+    }
+    score += hotelDeduction;
+
+    if (activeSosType === 'emergency') {
+        sosDeduction = -50;
+    } else if (activeSosType === 'silent') {
+        sosDeduction = -30;
+    }
+    score += sosDeduction;
+
+    // Nearby hazard score is user-driven only (via Report Nearby Hazard toggle).
+    nearbyHazardsCount = isLocalHazardReported ? 1 : 0;
+
+    if (nearbyHazardsCount > 0) {
+        hazardsDeduction = -(nearbyHazardsCount * 15);
+    }
+    score += hazardsDeduction;
+
+    score = Math.round(score);
+    score = Math.max(0, score);
+    score = Math.min(100, score);
+
+    console.log('--- Score Breakdown ---', {
+        start,
+        hotel: hotelCoordinates ? 0 : -10,
+        contacts: safetyContacts.length > 0 ? 0 : -15,
+        batteryDeduction,
+        timeDeduction,
+        hazards: -(nearbyHazardsCount * 15),
+        sos: activeSosType === 'emergency' ? -50 : (activeSosType === 'silent' ? -30 : 0),
+        finalScore: score
+    });
+
+    const badge = document.getElementById('safety-score-pill');
+    if (!badge) return score;
+
+    badge.classList.remove('risk-low', 'risk-moderate', 'risk-high');
+    if (score >= 80) {
+        badge.textContent = `${score}/100 (Low Risk)`;
+        badge.classList.add('risk-low');
+    } else if (score >= 50) {
+        badge.textContent = `${score}/100 (Moderate Risk)`;
+        badge.classList.add('risk-moderate');
+    } else {
+        badge.textContent = `${score}/100 (High Risk)`;
+        badge.classList.add('risk-high');
+    }
+
+    return score;
+}
+
+function updateSafetyScore() {
+    calculateSafetyScore().catch(error => {
+        console.error('Failed to update safety score:', error);
+    });
 }
 
 function reportRiskAtCurrentLocation() {
-    if (!userMarker) return;
-    const pos = userMarker.getLatLng();
-    const note = prompt('Report hazard type:', 'Suspicious activity');
-    if (!note) return;
-    riskPoints.push({
-        lat: pos.lat,
-        lng: pos.lng,
-        severity: 0.8,
-        label: note
+    const reportRiskBtn = document.getElementById('report-hazard-btn');
+    if (!reportRiskBtn) return;
+
+    if (!isLocalHazardReported) {
+        isLocalHazardReported = true;
+        reportRiskBtn.innerHTML = '<i class="fas fa-triangle-exclamation"></i> Clear Hazard Report';
+        reportRiskBtn.style.background = 'var(--red)';
+        reportRiskBtn.style.color = 'var(--white)';
+        reportRiskBtn.style.borderColor = 'var(--red)';
+        nearbyHazardsCount = 1;
+        showNotification('Hazard reported', 'Local hazard report is now active.');
+    } else {
+        isLocalHazardReported = false;
+        reportRiskBtn.innerHTML = '<i class="fas fa-triangle-exclamation"></i> Report Nearby Hazard';
+        reportRiskBtn.style.background = '';
+        reportRiskBtn.style.color = '';
+        reportRiskBtn.style.borderColor = '';
+        nearbyHazardsCount = 0;
+        showNotification('Hazard cleared', 'Local hazard report was cleared.');
+    }
+
+    calculateSafetyScore().catch(error => {
+        console.error('Failed to recalculate safety score:', error);
     });
-    localStorage.setItem('safepath_risk_points', JSON.stringify(riskPoints));
-    renderRiskOverlay();
-    updateSafetyScore(pos.lat, pos.lng);
-    logSafetyEvent('RISK_REPORTED', { note, location: pos });
-    showNotification('Hazard reported', 'Risk map updated for your area.');
 }
 
 function setHotelBaseToCurrentLocation() {
-    if (!userMarker) return;
-    const pos = userMarker.getLatLng();
+    const setHotelBtn = document.getElementById('set-hotel-btn');
+
+    if (hotelCoordinates) {
+        hotelCoordinates = null;
+        hotelBase = null;
+        localStorage.removeItem('safepath_hotel_base');
+
+        const hotelGeofenceIndex = geofences.findIndex(f => f.name === 'Hotel Safe Base');
+        if (hotelGeofenceIndex >= 0) {
+            const hotelGeofence = geofences[hotelGeofenceIndex];
+            if (hotelGeofence.circleObject && map && map.hasLayer(hotelGeofence.circleObject)) {
+                map.removeLayer(hotelGeofence.circleObject);
+            }
+            geofences.splice(hotelGeofenceIndex, 1);
+            saveGeofencesToStorage();
+        }
+
+        updateHotelStatusUI();
+        if (setHotelBtn) {
+            setHotelBtn.innerHTML = '<i class="fas fa-hotel"></i> Set Hotel At Current Location';
+            setHotelBtn.style.background = '';
+            setHotelBtn.style.color = '';
+            setHotelBtn.style.borderColor = '';
+            setHotelBtn.style.display = '';
+        }
+
+        showNotification('Hotel base cleared', 'Hotel base was removed.');
+        calculateSafetyScore().catch(error => {
+            console.error('Failed to recalculate safety score:', error);
+        });
+        return;
+    }
+
+    let lat;
+    let lng;
+    if (userMarker) {
+        const pos = userMarker.getLatLng();
+        lat = pos.lat;
+        lng = pos.lng;
+    } else if (map) {
+        const center = map.getCenter();
+        lat = center.lat;
+        lng = center.lng;
+    } else {
+        return;
+    }
+
+    hotelCoordinates = { lat, lng };
     hotelBase = {
-        lat: pos.lat,
-        lng: pos.lng,
+        lat,
+        lng,
         radius: 350,
         savedAt: new Date().toISOString()
     };
     localStorage.setItem('safepath_hotel_base', JSON.stringify(hotelBase));
     ensureHotelGeofence();
     updateHotelStatusUI();
+    if (setHotelBtn) {
+        setHotelBtn.innerHTML = '<i class="fas fa-trash"></i> Clear Hotel Base';
+        setHotelBtn.style.background = 'var(--amber)';
+        setHotelBtn.style.color = 'var(--charcoal)';
+        setHotelBtn.style.borderColor = 'var(--amber)';
+        setHotelBtn.style.display = '';
+    }
     logSafetyEvent('HOTEL_BASE_SET', { location: hotelBase });
     showNotification('Hotel base set', 'Night-time safety checks are now active.');
+    calculateSafetyScore().catch(error => {
+        console.error('Failed to recalculate safety score:', error);
+    });
 }
 
 function ensureHotelGeofence() {
@@ -511,13 +730,28 @@ function ensureHotelGeofence() {
 }
 
 function updateHotelStatusUI() {
+    const setHotelBtn = document.getElementById('set-hotel-btn');
     const status = document.getElementById('hotel-status');
     if (!status) return;
-    if (!hotelBase) {
+    if (!hotelCoordinates || !hotelBase) {
         status.textContent = 'Not configured';
+        if (setHotelBtn) {
+            setHotelBtn.innerHTML = '<i class="fas fa-hotel"></i> Set Hotel At Current Location';
+            setHotelBtn.style.background = '';
+            setHotelBtn.style.color = '';
+            setHotelBtn.style.borderColor = '';
+            setHotelBtn.style.display = '';
+        }
         return;
     }
     status.textContent = `Base active (${Math.round(hotelBase.radius)}m radius)`;
+    if (setHotelBtn) {
+        setHotelBtn.innerHTML = '<i class="fas fa-trash"></i> Clear Hotel Base';
+        setHotelBtn.style.background = 'var(--amber)';
+        setHotelBtn.style.color = 'var(--charcoal)';
+        setHotelBtn.style.borderColor = 'var(--amber)';
+        setHotelBtn.style.display = '';
+    }
 }
 
 function startHotelMonitor() {
@@ -733,6 +967,8 @@ function updateSafetyReadinessUI() {
             overall.style.color = 'var(--red)';
         }
     }
+
+    updateSafetyScore();
 }
 
 function applyOnboardingPreset() {
@@ -1401,90 +1637,348 @@ function saveGeofencesToStorage() {
 }
 
 function loadSafetyCircleFromStorage() {
-    const saved = localStorage.getItem('safepath_safetycircle');
-    if (saved) {
-        try {
-            safetyCircle = JSON.parse(saved);
-            updateSafetyCircleList();
-            updateSafetyReadinessUI();
-        } catch (e) {
-            console.log('No saved contacts');
-            addToSafetyCircle('Emergency Contact', 'emergency@example.com', '555-0123');
-            addToSafetyCircle('Travel Buddy', 'buddy@example.com', '555-0124');
-        }
-    } else {
-        addToSafetyCircle('Emergency Contact', 'emergency@example.com', '555-0123');
-        addToSafetyCircle('Travel Buddy', 'buddy@example.com', '555-0124');
+    if (isGuestMode || !currentUser || !currentUser.id) {
+        safetyContacts = [];
+        safetyCircle = [];
+        renderSafetyContacts();
+        updateSafetyReadinessUI();
+        return;
+    }
+
+    fetchSafetyContacts().catch(error => {
+        console.error('Failed to fetch safety contacts during load:', error);
+    });
+}
+
+async function fetchSafetyContacts() {
+    try {
+        const { data, error } = await supabase.from('safety_contacts').select('*');
+        if (error) throw error;
+
+        safetyContacts = Array.isArray(data) ? data : [];
+        safetyCircle = safetyContacts.map(contact => ({
+            id: contact.id,
+            name: `${contact.first_name || ''} ${contact.last_name || ''}`.trim() || contact.contact_name || 'Unnamed Contact',
+            email: '',
+            phone: '',
+            status: 'watching',
+            addedAt: new Date().toISOString()
+        }));
+
+        renderSafetyContacts();
+        await calculateSafetyScore();
+        updateSafetyReadinessUI();
+    } catch (fetchError) {
+        console.error('Failed to fetch safety contacts:', fetchError);
+        safetyContacts = [];
+        safetyCircle = [];
+        renderSafetyContacts();
+        await calculateSafetyScore();
+        updateSafetyReadinessUI();
     }
 }
 
 // ===== SAFETY CIRCLE =====
-function addToSafetyCircle(name, email, phone) {
-    const contact = {
-        id: Date.now().toString() + Math.random(),
-        name,
-        email,
-        phone,
-        status: 'watching',
-        addedAt: new Date().toISOString()
-    };
-    
-    safetyCircle.push(contact);
-    localStorage.setItem('safepath_safetycircle', JSON.stringify(safetyCircle));
-    updateSafetyCircleList();
-    updateSafetyReadinessUI();
-    
-    showNotification('✅ Contact Added', `${name} is now in your safety circle`);
+function openContactEditorModal() {
+    const modal = document.getElementById('contact-modal');
+    if (modal) {
+        syncContactEditorTheme();
+        modal.classList.add('active');
+    }
 }
 
-function updateSafetyCircleList() {
+function closeContactEditorModal() {
+    const modal = document.getElementById('contact-modal');
+    if (modal) {
+        modal.classList.remove('active');
+    }
+}
+
+function syncContactEditorTheme() {
+    const modal = document.getElementById('contact-modal');
+    if (!modal) return;
+    const isDark = document.body.classList.contains('dark-theme');
+    modal.classList.toggle('is-dark', isDark);
+    modal.classList.toggle('is-light', !isDark);
+}
+
+function resetContactEditorForm() {
+    const ids = [
+        'contact-first-name',
+        'contact-last-name',
+        'contact-company',
+        'contact-phone-number',
+        'contact-email'
+    ];
+    ids.forEach(id => {
+        const input = document.getElementById(id);
+        if (input) input.value = '';
+    });
+}
+
+async function addToSafetyCircle(firstName, lastName, phoneNumber, email, company) {
+    const safeFirstName = (firstName || '').trim();
+    const safeLastName = (lastName || '').trim();
+    const safePhoneNumber = (phoneNumber || '').trim();
+    const safeEmail = (email || '').trim();
+    const safeCompany = (company || '').trim();
+    if (!safeFirstName && !safeLastName) return false;
+
+    try {
+        const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+        if (sessionError) throw sessionError;
+        if (!session || !session.user) {
+            alert('Please sign in first.');
+            return false;
+        }
+
+        const { error } = await supabase.from('safety_contacts').insert([{
+            first_name: safeFirstName,
+            last_name: safeLastName,
+            phone_number: safePhoneNumber,
+            email: safeEmail,
+            company: safeCompany,
+            user_id: session.user.id
+        }]);
+        if (error) throw error;
+
+        await fetchSafetyContacts();
+        await calculateSafetyScore();
+        showNotification('✅ Contact Added', `${`${safeFirstName} ${safeLastName}`.trim()} is now in your safety circle`);
+        return true;
+    } catch (insertError) {
+        console.error('Failed to add safety contact:', insertError);
+        alert('Could not add contact right now. Please try again.');
+        return false;
+    }
+}
+
+function renderSafetyContacts() {
     const lists = [document.getElementById('safety-circle-list'), document.getElementById('mobile-safety-circle-list')].filter(Boolean);
     if (!lists.length) return;
     
     lists.forEach(list => {
         list.innerHTML = '';
         
-        if (safetyCircle.length === 0) {
+        if (safetyContacts.length === 0) {
             list.innerHTML = '<p class="no-contacts">No contacts added yet</p>';
             return;
         }
         
-        safetyCircle.forEach(contact => {
+        safetyContacts.forEach((contact) => {
             const item = document.createElement('div');
+            const displayName = `${contact.first_name || ''} ${contact.last_name || ''}`.trim() || contact.contact_name || 'Unnamed Contact';
             item.className = 'contact-item';
             item.innerHTML = `
-                <span class="contact-name">${contact.name}</span>
-                <span class="contact-status" style="background: ${contact.status === 'alerted' ? 'var(--amber)' : 'var(--emerald)'}">
-                    ${contact.status === 'alerted' ? 'Alerted' : 'Watching'}
-                </span>
+                <span class="contact-name">${displayName}</span>
+                <div class="contact-actions">
+                    <span class="contact-status">Watching</span>
+                    <button type="button" class="contact-remove-btn" data-id="${contact.id}" aria-label="Remove contact">
+                        <i class="fas fa-trash"></i>
+                    </button>
+                </div>
             `;
             list.appendChild(item);
+        });
+
+        list.querySelectorAll('.contact-remove-btn').forEach(btn => {
+            btn.addEventListener('click', async (e) => {
+                e.stopPropagation();
+                try {
+                    const contactId = e.target.closest('button').dataset.id;
+                    if (!contactId) return;
+                    const { error } = await supabase.from('safety_contacts').delete().eq('id', contactId);
+                    if (error) throw error;
+                    await fetchSafetyContacts();
+                } catch (deleteError) {
+                    console.error('Failed to remove safety contact:', deleteError);
+                    alert('Could not remove contact right now. Please try again.');
+                }
+            });
         });
     });
 }
 
+function updateSafetyCircleList() {
+    renderSafetyContacts();
+}
+
 // ===== GEOFENCE UI =====
-function updateGeofencesList() {
+function clearDbSafeZoneLayers() {
+    activeSafeZones.forEach(zone => {
+        if (zone._layer && map && map.hasLayer(zone._layer)) {
+            map.removeLayer(zone._layer);
+        }
+    });
+    geofences = geofences.filter(geofence => geofence.source !== 'db_safe_zone');
+}
+
+function drawSafeZoneLayer(zone) {
+    if (!map) return null;
+
+    let zoneData = zone.zone_data;
+    if (typeof zoneData === 'string') {
+        try {
+            zoneData = JSON.parse(zoneData);
+        } catch (error) {
+            zoneData = null;
+        }
+    }
+    if (!zoneData) return null;
+
+    if (zoneData.center && typeof zoneData.radius === 'number') {
+        const zoneType = zoneData.type || 'safe';
+        const color = zoneType === 'safe' ? '#2ecc71' : '#e74c3c';
+        const layer = L.circle([zoneData.center.lat, zoneData.center.lng], {
+            color,
+            fillColor: color,
+            fillOpacity: 0.15,
+            weight: 2,
+            radius: zoneData.radius,
+            className: zoneType === 'safe' ? 'safe-zone-glow' : 'restricted-zone-pulse'
+        }).addTo(map);
+
+        const geofenceReference = {
+            id: `db-zone-${zone.id}`,
+            name: zone.zone_name,
+            center: zoneData.center,
+            radius: zoneData.radius,
+            type: zoneType,
+            color,
+            source: 'db_safe_zone',
+            zoneId: zone.id,
+            circleObject: layer
+        };
+
+        layer.bindPopup(`
+            <b>${zone.zone_name}</b><br>
+            Type: ${zoneType} zone<br>
+            Radius: ${zoneData.radius}m
+        `);
+        layer.on('click', () => showDistanceToGeofence(geofenceReference));
+        geofences.push(geofenceReference);
+        return layer;
+    }
+
+    if (zoneData.geojson) {
+        return L.geoJSON(zoneData.geojson, {
+            style: {
+                color: '#2ecc71',
+                weight: 2,
+                fillColor: '#2ecc71',
+                fillOpacity: 0.15
+            }
+        }).addTo(map);
+    }
+
+    return null;
+}
+
+function renderSafeZones() {
     const list = document.getElementById('geofences-list');
     if (!list) return;
-    
+
     list.innerHTML = '';
-    
-    if (geofences.length === 0) {
+
+    if (!activeSafeZones.length) {
         list.innerHTML = '<p class="no-geofences">No safe zones created yet</p>';
         return;
     }
-    
-    geofences.forEach(geofence => {
+
+    activeSafeZones.forEach(zone => {
         const item = document.createElement('div');
         item.className = 'geofence-item';
         item.innerHTML = `
-            <span>${geofence.name}</span>
-            <span style="color: ${geofence.color}">${geofence.type}</span>
+            <span>${zone.zone_name}</span>
+            <div class="geofence-actions">
+                <span class="geofence-status">safe</span>
+                <button type="button" class="geofence-remove-btn" data-id="${zone.id}" aria-label="Remove zone">
+                    <i class="fas fa-trash"></i>
+                </button>
+            </div>
         `;
-        item.addEventListener('click', () => showDistanceToGeofence(geofence));
         list.appendChild(item);
     });
+
+    list.querySelectorAll('.geofence-remove-btn').forEach(btn => {
+        btn.addEventListener('click', async (e) => {
+            e.stopPropagation();
+            try {
+                const zoneId = e.target.closest('button').dataset.id;
+                if (!zoneId) return;
+
+                const { error } = await supabase.from('safe_zones').delete().eq('id', zoneId);
+                if (error) throw error;
+
+                const zoneToRemove = activeSafeZones.find(zone => String(zone.id) === String(zoneId));
+                if (zoneToRemove && zoneToRemove._layer && map && map.hasLayer(zoneToRemove._layer)) {
+                    map.removeLayer(zoneToRemove._layer);
+                }
+                geofences = geofences.filter(geofence => String(geofence.zoneId) !== String(zoneId));
+
+                await fetchSafeZones();
+            } catch (deleteError) {
+                console.error('Failed to remove safe zone:', deleteError);
+                alert('Could not remove safe zone right now. Please try again.');
+            }
+        });
+    });
+}
+
+async function fetchSafeZones() {
+    try {
+        if (isGuestMode || !currentUser || !currentUser.id) {
+            clearDbSafeZoneLayers();
+            activeSafeZones = [];
+            renderSafeZones();
+            return;
+        }
+
+        const { data, error } = await supabase.from('safe_zones').select('*');
+        if (error) throw error;
+
+        clearDbSafeZoneLayers();
+        activeSafeZones = Array.isArray(data) ? data.map(zone => ({ ...zone, _layer: null })) : [];
+
+        if (map) {
+            activeSafeZones.forEach(zone => {
+                zone._layer = drawSafeZoneLayer(zone);
+            });
+        }
+
+        renderSafeZones();
+    } catch (fetchError) {
+        console.error('Failed to fetch safe zones:', fetchError);
+        activeSafeZones = [];
+        renderSafeZones();
+    }
+}
+
+async function saveSafeZoneToDatabase(name, drawnLayerData) {
+    try {
+        const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+        if (sessionError) throw sessionError;
+        if (!session || !session.user) {
+            alert('Please sign in first.');
+            return;
+        }
+
+        const { error } = await supabase.from('safe_zones').insert([{
+            zone_name: name,
+            zone_data: drawnLayerData,
+            user_id: session.user.id
+        }]);
+        if (error) throw error;
+
+        await fetchSafeZones();
+    } catch (insertError) {
+        console.error('Failed to save safe zone:', insertError);
+        alert('Could not save safe zone right now. Please try again.');
+    }
+}
+
+function updateGeofencesList() {
+    renderSafeZones();
 }
 
 // ===== TRIP MANAGEMENT =====
@@ -1733,10 +2227,12 @@ function setupBatteryMonitoring() {
         navigator.getBattery().then(battery => {
             batteryLevelPercent = Math.round(battery.level * 100);
             checkBatteryLevel(batteryLevelPercent);
+            updateSafetyScore();
             
             battery.addEventListener('levelchange', () => {
                 batteryLevelPercent = Math.round(battery.level * 100);
                 checkBatteryLevel(batteryLevelPercent);
+                updateSafetyScore();
             });
         });
     }
@@ -1936,6 +2432,10 @@ function toggleSilentSOS(event) {
             });
         }
     }
+
+    calculateSafetyScore().catch(error => {
+        console.error('Failed to recalculate safety score after silent SOS toggle:', error);
+    });
 }
 
 // ===== NIGHT VISION TOGGLE =====
@@ -2021,6 +2521,8 @@ function setupNightVisionToggle() {
 // ===== THEME TOGGLE =====
 function applyThemePreference(isDark) {
     document.body.classList.toggle('dark-theme', isDark);
+    document.body.classList.toggle('light-mode', !isDark);
+    syncContactEditorTheme();
     updateThemeToggleIcon(isDark);
     
     if (map && primaryTiles && darkTiles) {
@@ -2473,7 +2975,11 @@ function triggerSOS() {
 
 function startSOSPreAlert() {
     if (silentSOSMode) {
+        activeSosType = 'silent';
         dispatchSOS(true);
+        calculateSafetyScore().catch(error => {
+            console.error('Failed to recalculate safety score on silent SOS activation:', error);
+        });
         return;
     }
 
@@ -2494,6 +3000,7 @@ function startSOSPreAlert() {
     }
     delete criticalActionArm.sos_send_now;
     modal.classList.add('active');
+    activeSosType = 'emergency';
     simulateHaptic('double');
 
     // Play siren during countdown
@@ -2511,12 +3018,17 @@ function startSOSPreAlert() {
             dispatchSOS(false);
         }
     }, 1000);
+
+    calculateSafetyScore().catch(error => {
+        console.error('Failed to recalculate safety score on SOS activation:', error);
+    });
 }
 
 function cancelSOSPreAlert() {
     stopSiren();
     clearInterval(sosCountdownInterval);
     sosCountdownInterval = null;
+    activeSosType = null;
     const modal = document.getElementById('sos-prealert-modal');
     const sendNowBtn = document.getElementById('send-sos-now-btn');
     if (modal) {
@@ -2532,6 +3044,10 @@ function cancelSOSPreAlert() {
     if (window.resetSOSSliderState) {
         window.resetSOSSliderState();
     }
+
+    calculateSafetyScore().catch(error => {
+        console.error('Failed to recalculate safety score on SOS cancel:', error);
+    });
 }
 
 function confirmSOSNow() {
@@ -2565,6 +3081,10 @@ function dispatchSOS(isSilent) {
         location: lastLocation,
         battery_level: getBatteryLevel(),
         silent_mode: isSilent
+    });
+    activeSosType = isSilent ? 'silent' : 'emergency';
+    calculateSafetyScore().catch(error => {
+        console.error('Failed to recalculate safety score on SOS dispatch:', error);
     });
 
     notifySafetyCircle('🚨 SOS ALERT', 
@@ -3048,6 +3568,78 @@ document.addEventListener('DOMContentLoaded', async () => {
         
         return;
     }
+
+    const loginScreenEl = document.getElementById('login-screen');
+    const dashboardScreenEl = document.getElementById('dashboard-screen');
+    const loginContainerEl = document.querySelector('.login-container');
+    const userEmailEl = document.getElementById('user-email');
+
+    const showAuthenticatedApp = async (session) => {
+        if (!session || !session.user || isGuestMode) return;
+
+        currentUser = {
+            email: session.user.email || DEMO_USER.email,
+            ...session.user
+        };
+
+        if (loginContainerEl) loginContainerEl.style.display = 'none';
+        if (loginScreenEl) loginScreenEl.classList.remove('active');
+        if (dashboardScreenEl) dashboardScreenEl.classList.add('active');
+        if (userEmailEl) userEmailEl.textContent = currentUser.email;
+
+        showSkeletonLoading();
+        setTimeout(() => initMap(), 300);
+
+        try {
+            if (!hostChannel && currentUser.id) {
+                hostChannel = supabase.channel(`tracking-${currentUser.id}`);
+                hostChannel.subscribe();
+            }
+        } catch (channelErr) {
+            console.error('Failed to initialize Supabase realtime tracking channel:', channelErr);
+        }
+
+        loadVaultDocuments();
+        renderShareLinks();
+        renderAuditTrail();
+        await fetchSafetyContacts();
+        await fetchSafeZones();
+        updateSafetyReadinessUI();
+    };
+
+    const showLoginApp = () => {
+        if (isGuestMode || window.location.hash.startsWith('#emergency-share=')) return;
+        if (loginContainerEl) loginContainerEl.style.display = '';
+        if (dashboardScreenEl) dashboardScreenEl.classList.remove('active');
+        if (loginScreenEl) loginScreenEl.classList.add('active');
+    };
+
+    try {
+        const { data: { session }, error } = await supabase.auth.getSession();
+        if (error) {
+            console.error('Initial session check failed:', error);
+        }
+        if (session) {
+            await showAuthenticatedApp(session);
+        } else {
+            showLoginApp();
+        }
+    } catch (sessionErr) {
+        console.error('Unexpected error during initial session check:', sessionErr);
+    }
+
+    supabase.auth.onAuthStateChange(async (event, session) => {
+        if (isGuestMode || window.location.hash.startsWith('#emergency-share=')) return;
+
+        if (event === 'SIGNED_IN' && session) {
+            await showAuthenticatedApp(session);
+            return;
+        }
+
+        if (event === 'SIGNED_OUT') {
+            showLoginApp();
+        }
+    });
     
     silentSOSMode = localStorage.getItem('silentSOSMode') === 'true';
 
@@ -3069,6 +3661,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     setupPasswordToggles();
     setupNightVisionToggle();
     setupThemeToggle();
+    syncContactEditorTheme();
     setupInfoPanelToggle();
     setupMobileUI();
     setupQuickActions();
@@ -3167,6 +3760,31 @@ document.addEventListener('DOMContentLoaded', async () => {
         authResetBtn.addEventListener('click', toggleResetMode);
     }
 
+    const googleLoginBtn = document.getElementById('google-login-btn');
+    if (googleLoginBtn) {
+        googleLoginBtn.addEventListener('click', async () => {
+            try {
+                const { data, error } = await supabase.auth.signInWithOAuth({
+                    provider: 'google',
+                    options: {
+                        redirectTo: window.location.origin
+                    }
+                });
+
+                if (error) {
+                    console.error('Google OAuth sign-in failed:', error);
+                    alert('Google sign-in failed. Please try again.');
+                    return;
+                }
+
+                console.log('Google OAuth initiated:', data);
+            } catch (oauthError) {
+                console.error('Unexpected Google OAuth error:', oauthError);
+                alert('Something went wrong during Google sign-in. Please try again.');
+            }
+        });
+    }
+
     // Login form
     const loginForm = document.getElementById('login-form');
     if (loginForm) {
@@ -3226,6 +3844,8 @@ document.addEventListener('DOMContentLoaded', async () => {
                     }
                     
                     loadVaultDocuments();
+                    await fetchSafetyContacts();
+                    await fetchSafeZones();
                 }
             }
         });
@@ -3236,6 +3856,8 @@ document.addEventListener('DOMContentLoaded', async () => {
     if (logoutBtn) {
         logoutBtn.addEventListener('click', () => {
             currentUser = null;
+            const loginContainer = document.querySelector('.login-container');
+            if (loginContainer) loginContainer.style.display = '';
             document.getElementById('login-screen').classList.add('active');
             document.getElementById('dashboard-screen').classList.remove('active');
             
@@ -3268,35 +3890,47 @@ document.addEventListener('DOMContentLoaded', async () => {
     const addContactBtn = document.getElementById('add-contact-btn');
     if (addContactBtn) {
         addContactBtn.addEventListener('click', () => {
-            document.getElementById('contact-modal').classList.add('active');
+            resetContactEditorForm();
+            openContactEditorModal();
         });
     }
     
     // Save contact button
     const saveContactBtn = document.getElementById('save-contact');
     if (saveContactBtn) {
-        saveContactBtn.addEventListener('click', () => {
-            const name = document.getElementById('contact-name').value;
+        saveContactBtn.addEventListener('click', async () => {
+            const firstName = document.getElementById('contact-first-name').value;
+            const lastName = document.getElementById('contact-last-name').value;
+            const company = document.getElementById('contact-company').value;
+            const phoneNumber = document.getElementById('contact-phone-number').value;
             const email = document.getElementById('contact-email').value;
-            const phone = document.getElementById('contact-phone').value;
-            
-            if (name && email) {
-                addToSafetyCircle(name, email, phone);
-                document.getElementById('contact-modal').classList.remove('active');
-                
-                document.getElementById('contact-name').value = '';
-                document.getElementById('contact-email').value = '';
-                document.getElementById('contact-phone').value = '';
-            } else {
-                alert('Please enter at least name and email');
+            const hasName = (firstName || '').trim() || (lastName || '').trim();
+
+            if (!hasName) {
+                alert('Please enter at least a first name or last name.');
+                return;
             }
+
+            const saved = await addToSafetyCircle(firstName, lastName, phoneNumber, email, company);
+            if (saved) {
+                resetContactEditorForm();
+                closeContactEditorModal();
+            }
+        });
+    }
+
+    const cancelContactEditorBtn = document.getElementById('contact-editor-cancel');
+    if (cancelContactEditorBtn) {
+        cancelContactEditorBtn.addEventListener('click', () => {
+            resetContactEditorForm();
+            closeContactEditorModal();
         });
     }
     
     // Add geofence button
     const addGeofenceBtn = document.getElementById('add-geofence-btn');
     if (addGeofenceBtn) {
-        addGeofenceBtn.addEventListener('click', () => {
+        addGeofenceBtn.addEventListener('click', async () => {
             if (!userMarker) {
                 alert('Please wait for location to load');
                 return;
@@ -3318,13 +3952,21 @@ document.addEventListener('DOMContentLoaded', async () => {
             }
             
             const { lat, lng } = userMarker.getLatLng();
+            const drawnLayerData = {
+                center: { lat, lng },
+                radius,
+                type,
+                createdAt: new Date().toISOString()
+            };
+
             if (type === 'restricted') {
                 runCriticalAction('create_restricted_zone', 'create restricted zone', () => {
-                    createGeofence(name, { lat, lng }, radius, type);
-                    updateSafetyReadinessUI();
+                    saveSafeZoneToDatabase(name, drawnLayerData).then(() => {
+                        updateSafetyReadinessUI();
+                    });
                 });
             } else {
-                createGeofence(name, { lat, lng }, radius, type);
+                await saveSafeZoneToDatabase(name, drawnLayerData);
                 updateSafetyReadinessUI();
             }
         });
@@ -3343,6 +3985,10 @@ document.addEventListener('DOMContentLoaded', async () => {
     if (acknowledgeBtn) {
         acknowledgeBtn.addEventListener('click', () => {
             stopSiren();
+            activeSosType = null;
+            calculateSafetyScore().catch(error => {
+                console.error('Failed to recalculate safety score after alert acknowledge:', error);
+            });
             document.getElementById('alert-modal').classList.remove('active');
             
             updateStatusCard('nominal', { 
@@ -3641,4 +4287,3 @@ function setupQuickActions() {
         });
     }
 }
-

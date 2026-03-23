@@ -56,11 +56,22 @@
     --theme-scrollbar-track: #ecf0f1;
     --theme-scrollbar-thumb: #008080;
     --theme-scrollbar-thumb-hover: #1a237e;
+    --modal-bg: #111827;
+    --modal-text: #e5e7eb;
+    --input-border: #2b3748;
+    --input-focus: #60a5fa;
+    --modal-input-bg: #0b1220;
+    --modal-accent: #60a5fa;
+    --modal-subtle: #93a4ba;
+    --modal-overlay: rgba(6, 10, 18, 0.68);
     
     /* Layout Variables (Glassmorphism structural mapping) */
     --theme-sidebar-bg: rgba(246, 248, 251, 0.85); /* Frosty light sidebar */
     --theme-pill-bg-gps-ok: #2ecc71;
     --theme-pill-text-gps-ok: #0b1a0f;
+    --success-color: #1fd879;
+    --warning-color: #f6b73c;
+    --danger-color: #ff5e57;
 
     /* Typography */
     --font-ui: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
@@ -118,16 +129,38 @@
     --theme-scrollbar-track: rgba(255, 255, 255, 0.02);
     --theme-scrollbar-thumb: rgba(255, 255, 255, 0.2);
     --theme-scrollbar-thumb-hover: rgba(255, 255, 255, 0.3);
+    --modal-bg: #111827;
+    --modal-text: #e5e7eb;
+    --input-border: #2b3748;
+    --input-focus: #60a5fa;
+    --modal-input-bg: #0b1220;
+    --modal-accent: #60a5fa;
+    --modal-subtle: #93a4ba;
+    --modal-overlay: rgba(6, 10, 18, 0.68);
     
     --theme-sidebar-bg: rgba(11, 21, 32, 0.85); /* Deep Navy Glass Sidebar */
     --theme-pill-bg-gps-ok: #2ecc71;
     --theme-pill-text-gps-ok: #0b1a0f;
+    --success-color: #4cff94;
+    --warning-color: #ffcc66;
+    --danger-color: #ff6b6b;
     
     --glass-bg: rgba(255, 255, 255, 0.05);
     --glass-border: rgba(255, 255, 255, 0.1);
     --shadow-sm: 0 4px 15px rgba(0, 0, 0, 0.3);
     --shadow-md: 0 8px 25px rgba(0, 0, 0, 0.4);
     --shadow-lg: 0 12px 35px rgba(0, 0, 0, 0.5);
+}
+
+body.light-mode {
+    --modal-bg: #ffffff;
+    --modal-text: #121826;
+    --input-border: #d6deea;
+    --input-focus: #3b82f6;
+    --modal-input-bg: #ffffff;
+    --modal-accent: #3b82f6;
+    --modal-subtle: #64748b;
+    --modal-overlay: rgba(9, 15, 28, 0.48);
 }
 
 /* .dark-theme overrides removed to enforce global Dark Glassmorphism from :root */
@@ -327,6 +360,75 @@ h4,
 
 .auth-forgot:hover {
     color: var(--white);
+}
+
+.divider {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin: 18px 0 14px;
+}
+
+.divider::before,
+.divider::after {
+    content: '';
+    flex: 1;
+    height: 1px;
+    background: rgba(255, 255, 255, 0.22);
+}
+
+.divider span {
+    color: rgba(255, 255, 255, 0.72);
+    font-size: 0.85rem;
+    font-weight: 500;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+}
+
+.oauth-btn {
+    width: 100%;
+    height: 52px;
+    border: 1px solid #dadce0;
+    border-radius: 14px;
+    background: #ffffff;
+    color: #3c4043;
+    font-size: 0.98rem;
+    font-weight: 600;
+    font-family: var(--font-ui);
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 12px;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.12);
+    cursor: pointer;
+    transition: background-color 0.2s ease, box-shadow 0.2s ease, transform 0.2s ease;
+}
+
+.oauth-btn::before {
+    content: '';
+    width: 18px;
+    height: 18px;
+    display: inline-block;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 48 48'%3E%3Cpath fill='%23FFC107' d='M43.6 20.5H42V20H24v8h11.3C33.7 32.7 29.2 36 24 36c-6.6 0-12-5.4-12-12S17.4 12 24 12c3 0 5.7 1.1 7.8 3l5.7-5.7C33.9 6.1 29.2 4 24 4C12.9 4 4 12.9 4 24s8.9 20 20 20s20-8.9 20-20c0-1.3-.1-2.4-.4-3.5z'/%3E%3Cpath fill='%23FF3D00' d='M6.3 14.7l6.6 4.8C14.7 15.8 19 12 24 12c3 0 5.7 1.1 7.8 3l5.7-5.7C33.9 6.1 29.2 4 24 4c-7.7 0-14.4 4.3-17.7 10.7z'/%3E%3Cpath fill='%234CAF50' d='M24 44c5.1 0 9.8-1.9 13.3-5.1l-6.1-5.2C29.2 35.2 26.7 36 24 36c-5.2 0-9.6-3.3-11.2-8l-6.5 5C9.5 39.5 16.2 44 24 44z'/%3E%3Cpath fill='%231976D2' d='M43.6 20.5H42V20H24v8h11.3c-.8 2.5-2.4 4.7-4.7 6.3l.1-.1l6.1 5.2C36.4 39.7 44 34 44 24c0-1.3-.1-2.4-.4-3.5z'/%3E%3C/svg%3E");
+    background-size: contain;
+    background-repeat: no-repeat;
+    background-position: center;
+}
+
+.oauth-btn:hover {
+    background: #f7f8f9;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.16);
+    transform: translateY(-1px);
+}
+
+.oauth-btn:active {
+    transform: translateY(0);
+    box-shadow: 0 1px 4px rgba(0, 0, 0, 0.14);
+}
+
+.oauth-btn:focus-visible {
+    outline: 3px solid rgba(66, 133, 244, 0.35);
+    outline-offset: 2px;
 }
 
 .auth-toggle-text {
@@ -958,6 +1060,64 @@ body:not(.dark-theme) .header .btn-text {
     color: var(--white);
 }
 
+.contact-actions {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.45rem;
+}
+
+.contact-remove-btn {
+    width: 28px;
+    height: 28px;
+    border: none;
+    border-radius: 8px;
+    background: rgba(231, 76, 60, 0.18);
+    color: #ff8a80;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    transition: background 0.2s ease, transform 0.2s ease, color 0.2s ease;
+}
+
+.contact-remove-btn:hover {
+    background: rgba(231, 76, 60, 0.32);
+    color: #ffd1ce;
+    transform: translateY(-1px);
+}
+
+.geofence-actions {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.45rem;
+}
+
+.geofence-status {
+    font-size: 0.82rem;
+    color: var(--emerald);
+    text-transform: lowercase;
+}
+
+.geofence-remove-btn {
+    width: 28px;
+    height: 28px;
+    border: none;
+    border-radius: 8px;
+    background: rgba(231, 76, 60, 0.18);
+    color: #ff8a80;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    transition: background 0.2s ease, transform 0.2s ease, color 0.2s ease;
+}
+
+.geofence-remove-btn:hover {
+    background: rgba(231, 76, 60, 0.32);
+    color: #ffd1ce;
+    transform: translateY(-1px);
+}
+
 .no-contacts,
 .no-geofences,
 .no-active {
@@ -1135,6 +1295,18 @@ body:not(.dark-theme) .header .btn-text {
     border-radius: 999px;
     background: var(--theme-pill-bg);
     color: var(--theme-pill-text);
+}
+
+#safety-score-pill.risk-low {
+    color: var(--success-color);
+}
+
+#safety-score-pill.risk-moderate {
+    color: var(--warning-color);
+}
+
+#safety-score-pill.risk-high {
+    color: var(--danger-color);
 }
 
 .smart-subtle {
@@ -1461,7 +1633,6 @@ position: absolute;
 .modal-content input, .modal-content select {
     width: 100%;
     padding: 12px 16px;
-    margin-bottom: 15px;
     border: 1px solid var(--theme-input-border);
     background: var(--theme-input-bg);
     color: var(--theme-text);
@@ -1470,6 +1641,28 @@ position: absolute;
     font-family: var(--font-ui);
     transition: all 0.3s ease;
     box-sizing: border-box;
+}
+
+/* Contact modal input rows: keep icon and text perfectly aligned */
+.modal-content .input-group {
+    position: relative;
+    margin-bottom: 15px;
+}
+
+.modal-content .input-group input {
+    margin-bottom: 0;
+    padding: 14px 16px 14px 44px;
+    line-height: 1.2;
+}
+
+.modal-content .input-group .input-icon {
+    position: absolute;
+    left: 14px;
+    top: 50%;
+    transform: translateY(-50%);
+    color: var(--theme-item-muted);
+    font-size: 1rem;
+    pointer-events: none;
 }
 
 .modal-content input:focus, .modal-content select:focus {
@@ -1519,6 +1712,105 @@ position: absolute;
 .alert-content p {
     margin-bottom: 1.5rem;
     font-size: 1.1rem;
+}
+
+/* iOS-style light contact editor modal */
+.contact-editor-modal {
+    background: var(--modal-overlay);
+    backdrop-filter: blur(8px);
+}
+
+.contact-editor-modal .modal-content {
+    background: var(--modal-bg);
+    color: var(--modal-text);
+    border-radius: 24px;
+    max-width: 460px;
+    width: min(92vw, 460px);
+    padding: 18px 18px 20px;
+    box-shadow: 0 20px 50px rgba(0, 0, 0, 0.22);
+}
+
+.contact-editor-topbar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 14px;
+}
+
+.contact-editor-title {
+    font-size: 1rem;
+    font-weight: 700;
+    color: var(--modal-text);
+}
+
+.contact-editor-action {
+    border: none;
+    background: transparent;
+    color: var(--modal-accent);
+    font-size: 0.95rem;
+    font-weight: 600;
+    cursor: pointer;
+    padding: 6px 2px;
+}
+
+.contact-editor-action.contact-editor-done {
+    font-weight: 700;
+}
+
+.contact-avatar-placeholder {
+    width: 92px;
+    height: 92px;
+    border-radius: 50%;
+    margin: 6px auto 16px;
+    background: color-mix(in srgb, var(--modal-accent) 8%, var(--modal-bg));
+    border: 1px solid color-mix(in srgb, var(--modal-accent) 24%, var(--modal-bg));
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.avatar-plus {
+    width: 34px;
+    height: 34px;
+    border-radius: 50%;
+    background: var(--modal-accent);
+    color: #ffffff;
+    font-size: 1.4rem;
+    line-height: 34px;
+    text-align: center;
+    font-weight: 600;
+}
+
+.contact-editor-form {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.contact-editor-field label {
+    display: block;
+    margin: 0 0 6px 3px;
+    font-size: 0.78rem;
+    color: var(--modal-subtle);
+    font-weight: 600;
+}
+
+.contact-editor-field input {
+    width: 100%;
+    height: 46px;
+    border: 1px solid var(--input-border);
+    border-radius: 14px;
+    background: var(--modal-input-bg);
+    padding: 0 14px;
+    color: var(--modal-text);
+    font-size: 1rem;
+    font-family: var(--font-ui);
+}
+
+.contact-editor-field input:focus {
+    outline: none;
+    border-color: var(--input-focus);
+    box-shadow: 0 0 0 3px color-mix(in srgb, var(--input-focus) 24%, transparent);
 }
 
 .alert-content button {
