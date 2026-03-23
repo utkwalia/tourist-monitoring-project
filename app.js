@@ -777,12 +777,93 @@ function runNightSafetyCheck() {
     }
 }
 
-const countryToLangMap = {
-    'IN': 'hi', 'FR': 'fr', 'ES': 'es', 'DE': 'de', 'IT': 'it', 'JP': 'ja', 'MX': 'es', 'BR': 'pt'
+const countryLanguages = {
+    US: { lang: 'en-US', name: 'English' },
+    IN: { lang: 'hi-IN', name: 'Hindi' },
+    FR: { lang: 'fr-FR', name: 'French' },
+    ES: { lang: 'es-ES', name: 'Spanish' },
+    DE: { lang: 'de-DE', name: 'German' },
+    IT: { lang: 'it-IT', name: 'Italian' },
+    JP: { lang: 'ja-JP', name: 'Japanese' },
+    MX: { lang: 'es-MX', name: 'Spanish (Mexico)' },
+    BR: { lang: 'pt-BR', name: 'Portuguese (Brazil)' },
+    AE: { lang: 'ar-AE', name: 'Arabic' },
+    TH: { lang: 'th-TH', name: 'Thai' }
 };
 const DEFAULT_HELP_PHRASE = "Please help me. I am in danger. Please call an emergency.";
 let currentHelpPhrase = DEFAULT_HELP_PHRASE;
-let currentVoiceLang = "en";
+let currentVoiceLang = "en-US";
+
+function getLanguageProfileForCountry(countryCode) {
+    return countryLanguages[countryCode] || countryLanguages.US;
+}
+
+function getTranslationLang(profile) {
+    return (profile.lang || 'en-US').split('-')[0];
+}
+
+function inferCountryFromDevice() {
+    try {
+        const locale = (navigator.language || '').toUpperCase();
+        if (locale.includes('-')) {
+            const region = locale.split('-')[1];
+            if (region && countryLanguages[region]) return region;
+        }
+    } catch (e) {}
+
+    try {
+        const tz = Intl.DateTimeFormat().resolvedOptions().timeZone || '';
+        if (tz.startsWith('Asia/Kolkata')) return 'IN';
+        if (tz.startsWith('Europe/Paris')) return 'FR';
+        if (tz.startsWith('Europe/Madrid')) return 'ES';
+        if (tz.startsWith('Europe/Berlin')) return 'DE';
+        if (tz.startsWith('Europe/Rome')) return 'IT';
+        if (tz.startsWith('Asia/Tokyo')) return 'JP';
+        if (tz.startsWith('America/Mexico_City')) return 'MX';
+        if (tz.startsWith('America/Sao_Paulo')) return 'BR';
+        if (tz.startsWith('Asia/Dubai')) return 'AE';
+        if (tz.startsWith('Asia/Bangkok')) return 'TH';
+    } catch (e) {}
+
+    return 'US';
+}
+
+async function translateText(text, targetLangForTranslation) {
+    const primary = `https://api.mymemory.translated.net/get?q=${encodeURIComponent(text)}&langpair=en|${targetLangForTranslation}`;
+    const fallback = `https://translate.googleapis.com/translate_a/single?client=gtx&sl=en&tl=${targetLangForTranslation}&dt=t&q=${encodeURIComponent(text)}`;
+
+    try {
+        const response = await fetch(primary);
+        if (response.ok) {
+            const data = await response.json();
+            const translated = data?.responseData?.translatedText;
+            if (translated && translated.trim()) return translated;
+        }
+        throw new Error('MyMemory unavailable');
+    } catch (primaryError) {
+        console.warn('MyMemory translation failed, trying fallback:', primaryError);
+        const response = await fetch(fallback);
+        if (!response.ok) throw new Error('Fallback translation failed');
+        const data = await response.json();
+        const translated = Array.isArray(data?.[0]) ? data[0].map(chunk => chunk?.[0] || '').join('') : '';
+        if (!translated.trim()) throw new Error('Fallback translation payload invalid');
+        return translated;
+    }
+}
+
+function updateLanguageBridgeFeedback(targetLanguageName, targetLanguageCode = '') {
+    const inputEl = document.getElementById('custom-help-phrase-input');
+    const label = `Translating to ${targetLanguageName}...`;
+    if (inputEl) {
+        inputEl.placeholder = `Type message in English • ${label}`;
+        inputEl.setAttribute('aria-label', label);
+    }
+
+    const debugEl = document.getElementById('language-target-debug');
+    if (debugEl) {
+        debugEl.textContent = `Detected country: ${currentCountry || '--'} | Target: ${targetLanguageName}${targetLanguageCode ? ` (${targetLanguageCode})` : ''}`;
+    }
+}
 
 async function updateLanguageBridgeUI() {
     const phraseEl = document.getElementById('help-phrase-text');
@@ -809,28 +890,30 @@ async function updateLanguageBridgeUI() {
         const geoResponse = await fetch(`https://api.bigdatacloud.net/data/reverse-geocode-client?latitude=${lat}&longitude=${lng}&localityLanguage=en`);
         if (!geoResponse.ok) throw new Error('Geocoding failed');
         const geoData = await geoResponse.json();
-        
-        const targetLang = countryToLangMap[geoData.countryCode] || "en";
 
-        if (targetLang === 'en') {
+        if (geoData && geoData.countryCode) {
+            currentCountry = geoData.countryCode.toUpperCase();
+        }
+
+        if (!currentCountry || currentCountry === 'US') {
+            currentCountry = inferCountryFromDevice();
+        }
+
+        const languageProfile = getLanguageProfileForCountry(currentCountry);
+        const targetLangForTranslation = getTranslationLang(languageProfile);
+        currentVoiceLang = languageProfile.lang;
+        updateLanguageBridgeFeedback(languageProfile.name, languageProfile.lang);
+
+        if (targetLangForTranslation === 'en') {
             currentHelpPhrase = DEFAULT_HELP_PHRASE;
-            currentVoiceLang = 'en';
         } else {
-            const translateResponse = await fetch(`https://api.mymemory.translated.net/get?q=${encodeURIComponent(DEFAULT_HELP_PHRASE)}&langpair=en|${targetLang}`);
-            if (!translateResponse.ok) throw new Error('Translation failed');
-            const translateData = await translateResponse.json();
-            
-            if (translateData.responseData && translateData.responseData.translatedText) {
-                currentHelpPhrase = translateData.responseData.translatedText;
-                currentVoiceLang = targetLang;
-            } else {
-                throw new Error("Translation payload invalid");
-            }
+            currentHelpPhrase = await translateText(DEFAULT_HELP_PHRASE, targetLangForTranslation);
         }
     } catch (error) {
         console.warn("Language Bridge fallback triggered:", error);
         currentHelpPhrase = DEFAULT_HELP_PHRASE;
-        currentVoiceLang = "en";
+        currentVoiceLang = "en-US";
+        updateLanguageBridgeFeedback('English', 'en-US');
     } finally {
         if (phraseEl) phraseEl.textContent = currentHelpPhrase;
     }
@@ -855,27 +938,27 @@ async function translateCustomPhrase() {
     
     const userInput = inputEl.value.trim();
     if (!userInput) return;
-    
-    phraseEl.textContent = 'Translating...';
+
+    if (!currentCountry || currentCountry === 'US') {
+        currentCountry = inferCountryFromDevice();
+    }
+    const languageProfile = getLanguageProfileForCountry(currentCountry);
+    const targetLangForTranslation = getTranslationLang(languageProfile);
+    currentVoiceLang = languageProfile.lang;
+    updateLanguageBridgeFeedback(languageProfile.name, languageProfile.lang);
+
+    phraseEl.textContent = `Translating to ${languageProfile.name}...`;
     
     try {
-        if (currentVoiceLang === 'en') {
+        if (targetLangForTranslation === 'en') {
             currentHelpPhrase = userInput;
         } else {
-            const response = await fetch(`https://api.mymemory.translated.net/get?q=${encodeURIComponent(userInput)}&langpair=en|${currentVoiceLang}`);
-            if (!response.ok) throw new Error('Translation API failed');
-            const data = await response.json();
-            
-            if (data.responseData && data.responseData.translatedText) {
-                currentHelpPhrase = data.responseData.translatedText;
-            } else {
-                throw new Error("Invalid translation response");
-            }
+            currentHelpPhrase = await translateText(userInput, targetLangForTranslation);
         }
     } catch (error) {
         console.error("Custom Translation failed:", error);
         currentHelpPhrase = userInput;
-        currentVoiceLang = 'en';
+        currentVoiceLang = 'en-US';
     } finally {
         phraseEl.textContent = currentHelpPhrase;
     }
