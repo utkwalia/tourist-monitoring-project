@@ -612,6 +612,13 @@ h4,
     font-size: 1.5rem;
 }
 
+.logo-small .logo-globe,
+.mobile-header-left .logo-globe {
+    font-size: 1.05rem !important;
+    opacity: 0.9;
+    color: var(--theme-accent);
+}
+
 .user-info {
     display: flex;
     align-items: center;
